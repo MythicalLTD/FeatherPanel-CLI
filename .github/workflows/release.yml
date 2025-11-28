@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on tags starting with 'v' (e.g., v1.0.0)
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to upload release assets
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          if [ "${{ github.ref_type }}" == "tag" ]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+            VERSION=${VERSION#refs/tags/}  # Handle tags without 'v' prefix
+          else
+            VERSION="dev-$(date +%Y%m%d-%H%M%S)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+      
+      - name: Build for all architectures
+        run: |
+          RIDS=("linux-x64" "linux-arm" "linux-arm64" "win-x64" "win-arm64" "osx-x64" "osx-arm64")
+          
+          for RID in "${RIDS[@]}"; do
+            echo "Building for $RID..."
+            
+            # Build and publish
+            dotnet publish FeatherCli.csproj \
+              -c Release \
+              -r $RID \
+              --self-contained true \
+              /p:PublishSingleFile=true \
+              /p:PublishTrimmed=false \
+              /p:EnableCompressionInSingleFile=true \
+              /p:IncludeNativeLibrariesForSelfExtract=true \
+              /p:Version=${{ steps.get_version.outputs.version }} \
+              -o publish/$RID
+            
+            # Determine executable name and extension
+            if [[ $RID == win-* ]]; then
+              EXEC_NAME="FeatherCli.exe"
+              OUTPUT_NAME="feathercli-$RID.exe"
+            else
+              EXEC_NAME="FeatherCli"
+              OUTPUT_NAME="feathercli-$RID"
+            fi
+            
+            # Rename executable
+            if [ -f "publish/$RID/$EXEC_NAME" ]; then
+              mv "publish/$RID/$EXEC_NAME" "publish/$RID/$OUTPUT_NAME"
+              if [[ $RID != win-* ]]; then
+                chmod +x "publish/$RID/$OUTPUT_NAME"
+              fi
+              echo "Created: $OUTPUT_NAME"
+            else
+              echo "ERROR: Executable not found for $RID"
+              exit 1
+            fi
+          done
+      
+      - name: Create release archive
+        if: github.ref_type == 'tag'
+        run: |
+          mkdir -p release-assets
+          RIDS=("linux-x64" "linux-arm" "linux-arm64" "win-x64" "win-arm64" "osx-x64" "osx-arm64")
+          
+          for RID in "${RIDS[@]}"; do
+            if [[ $RID == win-* ]]; then
+              OUTPUT_NAME="feathercli-$RID.exe"
+            else
+              OUTPUT_NAME="feathercli-$RID"
+            fi
+            
+            if [ -f "publish/$RID/$OUTPUT_NAME" ]; then
+              cp "publish/$RID/$OUTPUT_NAME" "release-assets/"
+            fi
+          done
+      
+      - name: Upload release assets
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release-assets/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
