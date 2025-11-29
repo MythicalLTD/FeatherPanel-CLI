@@ -32,7 +32,7 @@ public class UserSession
     public List<string>? Permissions { get; set; }
 
     [JsonProperty("preferences")]
-    public Dictionary<string, object>? Preferences { get; set; }
+    public List<object>? Preferences { get; set; }
 
     [JsonProperty("activity")]
     public ActivityData? Activity { get; set; }
