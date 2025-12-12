@@ -3423,9 +3423,11 @@ public class MigrateCommandModule : ICommandModule
                         }
                     }
                 }
-                else
+                
+                // Fallback: rebuild from imported_server_ids and successfully_imported_pterodactyl_server_ids
+                // This runs if mapping is empty or doesn't exist
+                if (serverToServerMapping.Count == 0)
                 {
-                    // Fallback: rebuild from imported_server_ids and successfully_imported_pterodactyl_server_ids
                     List<int>? importedList = null;
                     List<int>? pteroList = null;
 
@@ -3438,6 +3440,10 @@ public class MigrateCommandModule : ICommandModule
                         else if (importedIdsObj is List<object> importedObjList)
                         {
                             importedList = importedObjList.Select(x => Convert.ToInt32(x)).ToList();
+                        }
+                        else if (importedIdsObj is List<int> importedIntList)
+                        {
+                            importedList = importedIntList;
                         }
                     }
 
@@ -3466,10 +3472,15 @@ public class MigrateCommandModule : ICommandModule
                         {
                             pteroList = pteroObjList.Select(x => Convert.ToInt32(x)).ToList();
                         }
+                        else if (pteroIdsObj is List<int> pteroIntList)
+                        {
+                            pteroList = pteroIntList;
+                        }
                     }
 
                     if (importedList != null && pteroList != null && importedList.Count == pteroList.Count)
                     {
+                        AnsiConsole.MarkupLine("[yellow]⚠  Rebuilding server mapping from lists...[/]");
                         for (int i = 0; i < importedList.Count; i++)
                         {
                             serverToServerMapping[pteroList[i].ToString()] = importedList[i];
