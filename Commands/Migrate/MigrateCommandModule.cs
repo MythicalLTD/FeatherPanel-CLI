@@ -1086,7 +1086,42 @@ public class MigrateCommandModule : ICommandModule
             {
                 var mappingData = _migrationState.StepDetails["nest_to_realm_mapping"];
                 
-                if (mappingData is Dictionary<string, object> mappingDict && mappingDict.Count > 0)
+                // Handle JsonElement (when deserialized from JSON)
+                if (mappingData is JsonElement mappingJson)
+                {
+                    try
+                    {
+                        var dict = JsonSerializer.Deserialize<Dictionary<string, int>>(mappingJson.GetRawText());
+                        if (dict != null)
+                        {
+                            foreach (var kvp in dict)
+                            {
+                                if (int.TryParse(kvp.Key, out var nestId))
+                                {
+                                    nestToRealmMapping[nestId] = kvp.Value;
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Try parsing as Dictionary<string, object> if int deserialization fails
+                        var dictObj = JsonSerializer.Deserialize<Dictionary<string, object>>(mappingJson.GetRawText());
+                        if (dictObj != null)
+                        {
+                            foreach (var kvp in dictObj)
+                            {
+                                if (int.TryParse(kvp.Key, out var nestId) && kvp.Value != null)
+                                {
+                                    var realmId = Convert.ToInt32(kvp.Value);
+                                    nestToRealmMapping[nestId] = realmId;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Handle Dictionary<string, object> (when already parsed)
+                else if (mappingData is Dictionary<string, object> mappingDict && mappingDict.Count > 0)
                 {
                     foreach (var kvp in mappingDict)
                     {
@@ -1094,6 +1129,17 @@ public class MigrateCommandModule : ICommandModule
                         {
                             var realmId = Convert.ToInt32(kvp.Value);
                             nestToRealmMapping[nestId] = realmId;
+                        }
+                    }
+                }
+                // Handle Dictionary<string, int> (direct type)
+                else if (mappingData is Dictionary<string, int> directDict)
+                {
+                    foreach (var kvp in directDict)
+                    {
+                        if (int.TryParse(kvp.Key, out var nestId))
+                        {
+                            nestToRealmMapping[nestId] = kvp.Value;
                         }
                     }
                 }
@@ -1107,17 +1153,44 @@ public class MigrateCommandModule : ICommandModule
                 var importedRealmIds = _migrationState.StepDetails["imported_realm_ids"];
                 var pterodactylNestIds = _migrationState.StepDetails["pterodactyl_nest_ids"];
                 
-                if (importedRealmIds is List<object> realmIdsList && 
-                    pterodactylNestIds is List<object> nestIdsList &&
+                List<int>? realmIdsList = null;
+                List<int>? nestIdsList = null;
+                
+                // Handle JsonElement (when deserialized from JSON)
+                if (importedRealmIds is JsonElement realmIdsJson)
+                {
+                    realmIdsList = JsonSerializer.Deserialize<List<int>>(realmIdsJson.GetRawText());
+                }
+                else if (importedRealmIds is List<object> realmIdsObjList)
+                {
+                    realmIdsList = realmIdsObjList.Select(x => Convert.ToInt32(x)).ToList();
+                }
+                else if (importedRealmIds is List<int> realmIdsIntList)
+                {
+                    realmIdsList = realmIdsIntList;
+                }
+                
+                if (pterodactylNestIds is JsonElement nestIdsJson)
+                {
+                    nestIdsList = JsonSerializer.Deserialize<List<int>>(nestIdsJson.GetRawText());
+                }
+                else if (pterodactylNestIds is List<object> nestIdsObjList)
+                {
+                    nestIdsList = nestIdsObjList.Select(x => Convert.ToInt32(x)).ToList();
+                }
+                else if (pterodactylNestIds is List<int> nestIdsIntList)
+                {
+                    nestIdsList = nestIdsIntList;
+                }
+                
+                if (realmIdsList != null && nestIdsList != null &&
                     realmIdsList.Count > 0 &&
                     realmIdsList.Count == nestIdsList.Count)
                 {
                     AnsiConsole.MarkupLine("[yellow]⚠  Rebuilding nest to realm mapping from lists...[/]");
                     for (int i = 0; i < realmIdsList.Count; i++)
                     {
-                        var nestId = Convert.ToInt32(nestIdsList[i]);
-                        var realmId = Convert.ToInt32(realmIdsList[i]);
-                        nestToRealmMapping[nestId] = realmId;
+                        nestToRealmMapping[nestIdsList[i]] = realmIdsList[i];
                     }
                 }
             }
