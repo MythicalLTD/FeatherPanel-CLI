@@ -614,6 +614,19 @@ public class PterodactylDatabaseService
         }
     }
 
+    private async Task<bool> ColumnExistsAsync(MySqlConnection connection, string tableName, string columnName)
+    {
+        await using var command = new MySqlCommand(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @tableName AND COLUMN_NAME = @columnName",
+            connection
+        );
+        command.Parameters.AddWithValue("@tableName", tableName);
+        command.Parameters.AddWithValue("@columnName", columnName);
+        
+        var result = await command.ExecuteScalarAsync();
+        return Convert.ToInt32(result) > 0;
+    }
+
     public async Task<List<PterodactylServer>> GetServersAsync(PterodactylConfig config)
     {
         var servers = new List<PterodactylServer>();
@@ -622,8 +635,19 @@ public class PterodactylDatabaseService
         {
             await using var connection = await GetConnectionAsync(config);
             
+            // Check if parent_id column exists
+            var hasParentIdColumn = await ColumnExistsAsync(connection, "servers", "parent_id");
+            
+            // Build SELECT query conditionally
+            var selectColumns = "`id`, `uuid`, `uuidShort`, `node_id`, `name`, `description`, `status`, `skip_scripts`, `owner_id`, `memory`, `swap`, `disk`, `io`, `cpu`, `threads`, `oom_disabled`, `allocation_id`, `nest_id`, `egg_id`, `startup`, `image`, `allocation_limit`, `database_limit`, `backup_limit`";
+            if (hasParentIdColumn)
+            {
+                selectColumns += ", `parent_id`";
+            }
+            selectColumns += ", `external_id`, `installed_at`, `created_at`, `updated_at`";
+            
             await using var command = new MySqlCommand(
-                "SELECT `id`, `uuid`, `uuidShort`, `node_id`, `name`, `description`, `status`, `skip_scripts`, `owner_id`, `memory`, `swap`, `disk`, `io`, `cpu`, `threads`, `oom_disabled`, `allocation_id`, `nest_id`, `egg_id`, `startup`, `image`, `allocation_limit`, `database_limit`, `backup_limit`, `parent_id`, `external_id`, `installed_at`, `created_at`, `updated_at` FROM `servers` ORDER BY `id`",
+                $"SELECT {selectColumns} FROM `servers` ORDER BY `id`",
                 connection
             );
             
@@ -631,6 +655,13 @@ public class PterodactylDatabaseService
             
             while (await reader.ReadAsync())
             {
+                int? parentId = null;
+                if (hasParentIdColumn)
+                {
+                    var parentIdOrdinal = reader.GetOrdinal("parent_id");
+                    parentId = reader.IsDBNull(parentIdOrdinal) ? null : reader.GetInt32(parentIdOrdinal);
+                }
+                
                 servers.Add(new PterodactylServer
                 {
                     Id = reader.GetInt32(reader.GetOrdinal("id")),
@@ -657,7 +688,7 @@ public class PterodactylDatabaseService
                     AllocationLimit = reader.IsDBNull(reader.GetOrdinal("allocation_limit")) ? null : reader.GetInt32(reader.GetOrdinal("allocation_limit")),
                     DatabaseLimit = reader.GetInt32(reader.GetOrdinal("database_limit")),
                     BackupLimit = reader.GetInt32(reader.GetOrdinal("backup_limit")),
-                    ParentId = reader.IsDBNull(reader.GetOrdinal("parent_id")) ? null : reader.GetInt32(reader.GetOrdinal("parent_id")),
+                    ParentId = parentId,
                     ExternalId = reader.IsDBNull(reader.GetOrdinal("external_id")) ? null : reader.GetString(reader.GetOrdinal("external_id")),
                     InstalledAt = reader.IsDBNull(reader.GetOrdinal("installed_at")) ? null : reader.GetDateTime(reader.GetOrdinal("installed_at")),
                     CreatedAt = reader.IsDBNull(reader.GetOrdinal("created_at")) ? null : reader.GetDateTime(reader.GetOrdinal("created_at")),
