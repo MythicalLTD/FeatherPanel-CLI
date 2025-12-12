@@ -241,7 +241,7 @@ public class MigrateCommandModule : ICommandModule
             var session = await apiClient.GetUserSessionAsync();
             if (session?.UserInfo != null)
             {
-                AnsiConsole.MarkupLine($"[green]✓ Connected to FeatherPanel as: [bold]{session.UserInfo.Username}[/][/]");
+                AnsiConsole.MarkupLine($"[green]✓ Connected to FeatherPanel as: [bold]{EscapeMarkup(session.UserInfo.Username)}[/][/]");
                 
                 // Verify user has admin.root permission
                 if (session.Permissions == null || !session.Permissions.Contains("admin.root"))
@@ -264,7 +264,7 @@ public class MigrateCommandModule : ICommandModule
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]✗ Error connecting to FeatherPanel API: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]✗ Error connecting to FeatherPanel API: {EscapeMarkup(ex.Message)}[/]");
             AnsiConsole.MarkupLine("[yellow]Please verify your API URL and Key are correct[/]");
             return;
         }
@@ -296,7 +296,7 @@ public class MigrateCommandModule : ICommandModule
 
                 if (prerequisites.Error)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Prerequisites check failed: {prerequisites.ErrorMessage}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Prerequisites check failed: {EscapeMarkup(prerequisites.ErrorMessage)}[/]");
                     return;
                 }
 
@@ -364,7 +364,7 @@ public class MigrateCommandModule : ICommandModule
             }
             catch (Exception ex)
             {
-                AnsiConsole.MarkupLine($"[red]✗ Error checking prerequisites: {ex.Message}[/]");
+                AnsiConsole.MarkupLine($"[red]✗ Error checking prerequisites: {EscapeMarkup(ex.Message)}[/]");
                 AnsiConsole.MarkupLine("[yellow]Please verify your API permissions and try again[/]");
                 return;
             }
@@ -423,7 +423,7 @@ public class MigrateCommandModule : ICommandModule
             
             if (!validationResult.IsValid)
             {
-                AnsiConsole.MarkupLine($"[red]✗ Invalid Pterodactyl installation: {validationResult.ErrorMessage}[/]");
+                AnsiConsole.MarkupLine($"[red]✗ Invalid Pterodactyl installation: {EscapeMarkup(validationResult.ErrorMessage)}[/]");
                 return;
             }
 
@@ -482,7 +482,7 @@ public class MigrateCommandModule : ICommandModule
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]✗ Failed to load configuration: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]✗ Failed to load configuration: {EscapeMarkup(ex.Message)}[/]");
             return;
         }
 
@@ -516,7 +516,7 @@ public class MigrateCommandModule : ICommandModule
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]✗ Failed to connect to database: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]✗ Failed to connect to database: {EscapeMarkup(ex.Message)}[/]");
             AnsiConsole.MarkupLine("[yellow]Please verify your database credentials in the .env file[/]");
             return;
         }
@@ -564,7 +564,7 @@ public class MigrateCommandModule : ICommandModule
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]✗ Failed to check required tables: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]✗ Failed to check required tables: {EscapeMarkup(ex.Message)}[/]");
             AnsiConsole.MarkupLine("[yellow]Please verify your database connection and permissions[/]");
             return;
         }
@@ -594,7 +594,7 @@ public class MigrateCommandModule : ICommandModule
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[yellow]⚠  Could not read app name: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[yellow]⚠  Could not read app name: {EscapeMarkup(ex.Message)}[/]");
             // Don't fail the migration if we can't read the app name
         }
 
@@ -643,7 +643,7 @@ public class MigrateCommandModule : ICommandModule
             }
             catch (Exception ex)
             {
-                AnsiConsole.MarkupLine($"[red]✗ Error setting maintenance mode: {ex.Message}[/]");
+                AnsiConsole.MarkupLine($"[red]✗ Error setting maintenance mode: {EscapeMarkup(ex.Message)}[/]");
                 AnsiConsole.MarkupLine("[yellow]Please manually put Pterodactyl into maintenance mode with:[/]");
                 AnsiConsole.MarkupLine($"[yellow]  cd {pterodactylPath}[/]");
                 AnsiConsole.MarkupLine("[yellow]  php artisan down[/]");
@@ -849,10 +849,10 @@ public class MigrateCommandModule : ICommandModule
 
                     if (response == null || response.Error || !response.Success)
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Failed to import location '{location.Short}' (ID: {location.Id})[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Failed to import location '{EscapeMarkup(location.Short)}' (ID: {location.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         failedCount++;
                     }
@@ -864,25 +864,25 @@ public class MigrateCommandModule : ICommandModule
                             // Verify the ID matches what we requested (should be the same as Pterodactyl ID)
                             if (locationId == location.Id)
                             {
-                                AnsiConsole.MarkupLine($"[green]✓ Imported location '{location.Short}' (ID: {location.Id} - preserved)[/]");
+                                AnsiConsole.MarkupLine($"[green]✓ Imported location '{EscapeMarkup(location.Short)}' (ID: {location.Id} - preserved)[/]");
                             }
                             else
                             {
-                                AnsiConsole.MarkupLine($"[yellow]⚠  Imported location '{location.Short}' (Pterodactyl ID: {location.Id} → FeatherPanel ID: {locationId}) - ID changed[/]");
+                                AnsiConsole.MarkupLine($"[yellow]⚠  Imported location '{EscapeMarkup(location.Short)}' (Pterodactyl ID: {location.Id} → FeatherPanel ID: {locationId}) - ID changed[/]");
                             }
                             importedCount++;
                             importedLocationIds.Add(locationId);
                         }
                         else
                         {
-                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported location '{location.Short}' (ID: {location.Id}) but location ID was not returned[/]");
+                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported location '{EscapeMarkup(location.Short)}' (ID: {location.Id}) but location ID was not returned[/]");
                             importedCount++;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Error importing location '{location.Short}' (ID: {location.Id}): {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Error importing location '{EscapeMarkup(location.Short)}' (ID: {location.Id}): {EscapeMarkup(ex.Message)}[/]");
                     failedCount++;
                 }
             }
@@ -977,10 +977,10 @@ public class MigrateCommandModule : ICommandModule
 
                     if (response == null || response.Error || !response.Success)
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Failed to import nest '{nest.Name}' (ID: {nest.Id})[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Failed to import nest '{EscapeMarkup(nest.Name)}' (ID: {nest.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         failedCount++;
                     }
@@ -993,25 +993,25 @@ public class MigrateCommandModule : ICommandModule
                             // Verify the ID matches what we requested (should be the same as Pterodactyl nest ID)
                             if (realmId == nest.Id)
                             {
-                                AnsiConsole.MarkupLine($"[green]✓ Imported nest '{nest.Name}' (ID: {nest.Id} - preserved as Realm)[/]");
+                                AnsiConsole.MarkupLine($"[green]✓ Imported nest '{EscapeMarkup(nest.Name)}' (ID: {nest.Id} - preserved as Realm)[/]");
                             }
                             else
                             {
-                                AnsiConsole.MarkupLine($"[yellow]⚠  Imported nest '{nest.Name}' (Pterodactyl ID: {nest.Id} → Realm ID: {realmId}) - ID changed[/]");
+                                AnsiConsole.MarkupLine($"[yellow]⚠  Imported nest '{EscapeMarkup(nest.Name)}' (Pterodactyl ID: {nest.Id} → Realm ID: {realmId}) - ID changed[/]");
                             }
                             importedRealmIds.Add(realmId);
                             nestToRealmMapping[nest.Id] = realmId;
                         }
                         else
                         {
-                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported nest '{nest.Name}' (ID: {nest.Id}) but realm ID was not returned in response[/]");
+                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported nest '{EscapeMarkup(nest.Name)}' (ID: {nest.Id}) but realm ID was not returned in response[/]");
                             AnsiConsole.MarkupLine($"[dim]  Response: Success={response.Success}, Data={response.Data != null}, Realm={response.Data?.Realm != null}[/]");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Error importing nest '{nest.Name}' (ID: {nest.Id}): {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Error importing nest '{EscapeMarkup(nest.Name)}' (ID: {nest.Id}): {EscapeMarkup(ex.Message)}[/]");
                     failedCount++;
                 }
             }
@@ -1258,7 +1258,7 @@ public class MigrateCommandModule : ICommandModule
                     // Check if we have a mapping for this nest
                     if (!nestToRealmMapping.ContainsKey(egg.NestId))
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Skipping egg '{egg.Name}' (ID: {egg.Id}) - No realm mapping for nest ID {egg.NestId}[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Skipping egg '{EscapeMarkup(egg.Name)}' (ID: {egg.Id}) - No realm mapping for nest ID {egg.NestId}[/]");
                         failedCount++;
                         continue;
                     }
@@ -1326,10 +1326,10 @@ public class MigrateCommandModule : ICommandModule
 
                     if (response == null || response.Error || !response.Success)
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Failed to import egg '{egg.Name}' (ID: {egg.Id})[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Failed to import egg '{EscapeMarkup(egg.Name)}' (ID: {egg.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         failedCount++;
                     }
@@ -1343,11 +1343,11 @@ public class MigrateCommandModule : ICommandModule
                             // Verify the ID matches what we requested (should be the same as Pterodactyl egg ID)
                             if (spellId == egg.Id)
                             {
-                                AnsiConsole.MarkupLine($"[green]✓ Imported egg '{egg.Name}' (ID: {egg.Id} - preserved as Spell) with {varsImported} variable(s)[/]");
+                                AnsiConsole.MarkupLine($"[green]✓ Imported egg '{EscapeMarkup(egg.Name)}' (ID: {egg.Id} - preserved as Spell) with {varsImported} variable(s)[/]");
                             }
                             else
                             {
-                                AnsiConsole.MarkupLine($"[yellow]⚠  Imported egg '{egg.Name}' (Pterodactyl ID: {egg.Id} → Spell ID: {spellId}) - ID changed, with {varsImported} variable(s)[/]");
+                                AnsiConsole.MarkupLine($"[yellow]⚠  Imported egg '{EscapeMarkup(egg.Name)}' (Pterodactyl ID: {egg.Id} → Spell ID: {spellId}) - ID changed, with {varsImported} variable(s)[/]");
                             }
                             if (egg.Variables.Count > 0 && varsImported == 0)
                             {
@@ -1356,7 +1356,7 @@ public class MigrateCommandModule : ICommandModule
                                 {
                                     foreach (var error in response.Data.VariableErrors)
                                     {
-                                        AnsiConsole.MarkupLine($"[dim]    Error: {error}[/]");
+                                        AnsiConsole.MarkupLine($"[dim]    Error: {EscapeMarkup(error)}[/]");
                                     }
                                 }
                             }
@@ -1366,14 +1366,14 @@ public class MigrateCommandModule : ICommandModule
                         }
                         else
                         {
-                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported egg '{egg.Name}' (ID: {egg.Id}) but spell ID was not returned[/]");
+                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported egg '{EscapeMarkup(egg.Name)}' (ID: {egg.Id}) but spell ID was not returned[/]");
                             importedCount++;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Error importing egg '{egg.Name}' (ID: {egg.Id}): {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Error importing egg '{EscapeMarkup(egg.Name)}' (ID: {egg.Id}): {EscapeMarkup(ex.Message)}[/]");
                     failedCount++;
                 }
             }
@@ -1552,7 +1552,7 @@ public class MigrateCommandModule : ICommandModule
                     // Check if we have a mapping for this location
                     if (!locationMapping.ContainsKey(node.LocationId.ToString()))
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Skipping node '{node.Name}' (ID: {node.Id}) - No location mapping for location ID {node.LocationId}[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Skipping node '{EscapeMarkup(node.Name)}' (ID: {node.Id}) - No location mapping for location ID {node.LocationId}[/]");
                         failedCount++;
                         continue;
                     }
@@ -1610,10 +1610,10 @@ public class MigrateCommandModule : ICommandModule
 
                     if (response == null || response.Error || !response.Success)
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Failed to import node '{node.Name}' (ID: {node.Id})[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Failed to import node '{EscapeMarkup(node.Name)}' (ID: {node.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         failedCount++;
                     }
@@ -1625,25 +1625,25 @@ public class MigrateCommandModule : ICommandModule
                             // Verify the ID matches what we requested (should be the same as Pterodactyl node ID)
                             if (nodeId == node.Id)
                             {
-                                AnsiConsole.MarkupLine($"[green]✓ Imported node '{node.Name}' (ID: {node.Id} - preserved)[/]");
+                                AnsiConsole.MarkupLine($"[green]✓ Imported node '{EscapeMarkup(node.Name)}' (ID: {node.Id} - preserved)[/]");
                             }
                             else
                             {
-                                AnsiConsole.MarkupLine($"[yellow]⚠  Imported node '{node.Name}' (Pterodactyl ID: {node.Id} → Node ID: {nodeId}) - ID changed[/]");
+                                AnsiConsole.MarkupLine($"[yellow]⚠  Imported node '{EscapeMarkup(node.Name)}' (Pterodactyl ID: {node.Id} → Node ID: {nodeId}) - ID changed[/]");
                             }
                             importedCount++;
                             importedNodeIds.Add(nodeId);
                         }
                         else
                         {
-                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported node '{node.Name}' (ID: {node.Id}) but node ID was not returned[/]");
+                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported node '{EscapeMarkup(node.Name)}' (ID: {node.Id}) but node ID was not returned[/]");
                             importedCount++;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Error importing node '{node.Name}' (ID: {node.Id}): {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Error importing node '{EscapeMarkup(node.Name)}' (ID: {node.Id}): {EscapeMarkup(ex.Message)}[/]");
                     failedCount++;
                 }
             }
@@ -1825,7 +1825,7 @@ public class MigrateCommandModule : ICommandModule
                         }
                         else
                         {
-                            AnsiConsole.MarkupLine($"[yellow]⚠  Warning: No node mapping for node ID {host.NodeId.Value} for database host '{host.Name}' (ID: {host.Id}). Will create without node_id.[/]");
+                            AnsiConsole.MarkupLine($"[yellow]⚠  Warning: No node mapping for node ID {host.NodeId.Value} for database host '{EscapeMarkup(host.Name)}' (ID: {host.Id}). Will create without node_id.[/]");
                             mappedNodeId = null; // Don't send node_id if mapping not found
                         }
                     }
@@ -1863,10 +1863,10 @@ public class MigrateCommandModule : ICommandModule
 
                     if (response == null || response.Error || !response.Success)
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Failed to import database host '{host.Name}' (ID: {host.Id})[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Failed to import database host '{EscapeMarkup(host.Name)}' (ID: {host.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         // Show full response for debugging
                         if (response != null)
@@ -1892,25 +1892,25 @@ public class MigrateCommandModule : ICommandModule
                             // Verify the ID matches what we requested (should be the same as Pterodactyl database host ID)
                             if (databaseId == host.Id)
                             {
-                                AnsiConsole.MarkupLine($"[green]✓ Imported database host '{host.Name}' (ID: {host.Id} - preserved)[/]");
+                                AnsiConsole.MarkupLine($"[green]✓ Imported database host '{EscapeMarkup(host.Name)}' (ID: {host.Id} - preserved)[/]");
                             }
                             else
                             {
-                                AnsiConsole.MarkupLine($"[yellow]⚠  Imported database host '{host.Name}' (Pterodactyl ID: {host.Id} → Database ID: {databaseId}) - ID changed[/]");
+                                AnsiConsole.MarkupLine($"[yellow]⚠  Imported database host '{EscapeMarkup(host.Name)}' (Pterodactyl ID: {host.Id} → Database ID: {databaseId}) - ID changed[/]");
                             }
                             importedCount++;
                             importedDatabaseHostIds.Add(databaseId);
                         }
                         else
                         {
-                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported database host '{host.Name}' (ID: {host.Id}) but database ID was not returned[/]");
+                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported database host '{EscapeMarkup(host.Name)}' (ID: {host.Id}) but database ID was not returned[/]");
                             importedCount++;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Error importing database host '{host.Name}' (ID: {host.Id}): {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Error importing database host '{EscapeMarkup(host.Name)}' (ID: {host.Id}): {EscapeMarkup(ex.Message)}[/]");
                     failedCount++;
                 }
             }
@@ -2091,7 +2091,7 @@ public class MigrateCommandModule : ICommandModule
                         AnsiConsole.MarkupLine($"[red]✗ Failed to import allocation {allocation.Ip}:{allocation.Port} (ID: {allocation.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         if (response?.Data?.Allocation == null)
                         {
@@ -2111,7 +2111,7 @@ public class MigrateCommandModule : ICommandModule
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Error importing allocation {allocation.Ip}:{allocation.Port} (ID: {allocation.Id}): {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Error importing allocation {EscapeMarkup(allocation.Ip)}:{allocation.Port} (ID: {allocation.Id}): {EscapeMarkup(ex.Message)}[/]");
                     failedCount++;
                 }
             }
@@ -2204,7 +2204,7 @@ public class MigrateCommandModule : ICommandModule
                     // Skip user ID 1 (reserved for main user)
                     if (user.Id == 1)
                     {
-                        AnsiConsole.MarkupLine($"[yellow]⚠  Skipping user '{user.Username}' (ID: {user.Id}) - ID 1 is reserved for the main user[/]");
+                        AnsiConsole.MarkupLine($"[yellow]⚠  Skipping user '{EscapeMarkup(user.Username)}' (ID: {user.Id}) - ID 1 is reserved for the main user[/]");
                         skippedCount++;
                         continue;
                     }
@@ -2236,7 +2236,7 @@ public class MigrateCommandModule : ICommandModule
                         AnsiConsole.MarkupLine($"[red]✗ Failed to import user '{user.Username}' (ID: {user.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         if (response?.Data?.User == null)
                         {
@@ -2246,7 +2246,7 @@ public class MigrateCommandModule : ICommandModule
                     }
                     else
                     {
-                        AnsiConsole.MarkupLine($"[green]✓ Imported user '{user.Username}' (ID: {user.Id})[/]");
+                        AnsiConsole.MarkupLine($"[green]✓ Imported user '{EscapeMarkup(user.Username)}' (ID: {user.Id})[/]");
                         importedCount++;
                         if (response.Data?.User?.Id != null)
                         {
@@ -2257,7 +2257,7 @@ public class MigrateCommandModule : ICommandModule
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Error importing user '{user.Username}' (ID: {user.Id}): {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Error importing user '{EscapeMarkup(user.Username)}' (ID: {user.Id}): {EscapeMarkup(ex.Message)}[/]");
                     failedCount++;
                 }
             }
@@ -2445,7 +2445,7 @@ public class MigrateCommandModule : ICommandModule
                         AnsiConsole.MarkupLine($"[red]✗ Failed to import SSH key '{sshKey.Name}' (ID: {sshKey.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         if (response?.Data?.SshKey == null)
                         {
@@ -2455,7 +2455,7 @@ public class MigrateCommandModule : ICommandModule
                     }
                     else
                     {
-                        AnsiConsole.MarkupLine($"[green]✓ Imported SSH key '{sshKey.Name}' (ID: {sshKey.Id})[/]");
+                        AnsiConsole.MarkupLine($"[green]✓ Imported SSH key '{EscapeMarkup(sshKey.Name)}' (ID: {sshKey.Id})[/]");
                         importedCount++;
                         if (response.Data?.SshKey?.Id != null)
                         {
@@ -2465,7 +2465,7 @@ public class MigrateCommandModule : ICommandModule
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Error importing SSH key '{sshKey.Name}' (ID: {sshKey.Id}): {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Error importing SSH key '{EscapeMarkup(sshKey.Name)}' (ID: {sshKey.Id}): {EscapeMarkup(ex.Message)}[/]");
                     failedCount++;
                 }
             }
@@ -2810,14 +2810,14 @@ public class MigrateCommandModule : ICommandModule
                     }
                     else
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Skipping server '{server.Name}' (ID: {server.Id}) - No realm mapping for nest ID {server.NestId}[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Skipping server '{EscapeMarkup(server.Name)}' (ID: {server.Id}) - No realm mapping for nest ID {server.NestId}[/]");
                         failedCount++;
                         continue;
                     }
 
                     if (!eggToSpellMapping.ContainsKey(server.EggId.ToString()))
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Skipping server '{server.Name}' (ID: {server.Id}) - No spell mapping for egg ID {server.EggId}[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Skipping server '{EscapeMarkup(server.Name)}' (ID: {server.Id}) - No spell mapping for egg ID {server.EggId}[/]");
                         failedCount++;
                         continue;
                     }
@@ -2835,7 +2835,7 @@ public class MigrateCommandModule : ICommandModule
                     // Map allocation_id
                     if (!allocationToAllocationMapping.ContainsKey(server.AllocationId.ToString()))
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Skipping server '{server.Name}' (ID: {server.Id}) - No allocation mapping for allocation ID {server.AllocationId}[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Skipping server '{EscapeMarkup(server.Name)}' (ID: {server.Id}) - No allocation mapping for allocation ID {server.AllocationId}[/]");
                         failedCount++;
                         continue;
                     }
@@ -2913,10 +2913,10 @@ public class MigrateCommandModule : ICommandModule
 
                     if (response == null || response.Error || !response.Success)
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Failed to import server '{server.Name}' (ID: {server.Id})[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Failed to import server '{EscapeMarkup(server.Name)}' (ID: {server.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         if (response?.Data?.Server == null)
                         {
@@ -2931,7 +2931,7 @@ public class MigrateCommandModule : ICommandModule
                         
                         if (serverId > 0)
                         {
-                            AnsiConsole.MarkupLine($"[green]✓ Imported server '{server.Name}' (ID: {server.Id}) with {varsImported} variable(s)[/]");
+                            AnsiConsole.MarkupLine($"[green]✓ Imported server '{EscapeMarkup(server.Name)}' (ID: {server.Id}) with {varsImported} variable(s)[/]");
                             importedCount++;
                             totalVariablesImported += varsImported;
                             importedServerIds.Add(serverId);
@@ -2956,14 +2956,14 @@ public class MigrateCommandModule : ICommandModule
                         }
                         else
                         {
-                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported server '{server.Name}' (ID: {server.Id}) but server ID was not returned[/]");
+                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported server '{EscapeMarkup(server.Name)}' (ID: {server.Id}) but server ID was not returned[/]");
                             importedCount++;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Error importing server '{server.Name}' (ID: {server.Id}): {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Error importing server '{EscapeMarkup(server.Name)}' (ID: {server.Id}): {EscapeMarkup(ex.Message)}[/]");
                     failedCount++;
                 }
             }
@@ -3293,7 +3293,7 @@ public class MigrateCommandModule : ICommandModule
                         AnsiConsole.MarkupLine($"[red]✗ Failed to import server database '{database.Database}' (ID: {database.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         if (response?.Data?.Database == null)
                         {
@@ -3320,7 +3320,7 @@ public class MigrateCommandModule : ICommandModule
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Error importing server database '{database.Database}' (ID: {database.Id}): {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Error importing server database '{EscapeMarkup(database.Database)}' (ID: {database.Id}): {EscapeMarkup(ex.Message)}[/]");
                     failedCount++;
                 }
             }
@@ -3495,7 +3495,7 @@ public class MigrateCommandModule : ICommandModule
                     // Map server_id
                     if (!serverToServerMapping.ContainsKey(backup.ServerId.ToString()))
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Skipping backup '{backup.Name}' (ID: {backup.Id}) - No server mapping for server ID {backup.ServerId}[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Skipping backup '{EscapeMarkup(backup.Name)}' (ID: {backup.Id}) - No server mapping for server ID {backup.ServerId}[/]");
                         failedCount++;
                         continue;
                     }
@@ -3530,10 +3530,10 @@ public class MigrateCommandModule : ICommandModule
 
                     if (response == null || response.Error || !response.Success)
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Failed to import backup '{backup.Name}' (ID: {backup.Id})[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Failed to import backup '{EscapeMarkup(backup.Name)}' (ID: {backup.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         if (response?.Data?.Backup == null)
                         {
@@ -3547,20 +3547,20 @@ public class MigrateCommandModule : ICommandModule
                         
                         if (backupId > 0)
                         {
-                            AnsiConsole.MarkupLine($"[green]✓ Imported backup '{backup.Name}' (ID: {backup.Id})[/]");
+                            AnsiConsole.MarkupLine($"[green]✓ Imported backup '{EscapeMarkup(backup.Name)}' (ID: {backup.Id})[/]");
                             importedCount++;
                             importedBackupIds.Add(backupId);
                         }
                         else
                         {
-                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported backup '{backup.Name}' (ID: {backup.Id}) but backup ID was not returned[/]");
+                            AnsiConsole.MarkupLine($"[yellow]⚠  Imported backup '{EscapeMarkup(backup.Name)}' (ID: {backup.Id}) but backup ID was not returned[/]");
                             importedCount++;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine($"[red]✗ Error importing backup '{backup.Name}' (ID: {backup.Id}): {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]✗ Error importing backup '{EscapeMarkup(backup.Name)}' (ID: {backup.Id}): {EscapeMarkup(ex.Message)}[/]");
                     failedCount++;
                 }
             }
@@ -3834,7 +3834,7 @@ public class MigrateCommandModule : ICommandModule
                         AnsiConsole.MarkupLine($"[red]✗ Failed to import subuser (ID: {subuser.Id}, User: {subuser.UserId}, Server: {subuser.ServerId})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         failedCount++;
                     }
@@ -4036,7 +4036,7 @@ public class MigrateCommandModule : ICommandModule
                         AnsiConsole.MarkupLine($"[red]✗ Failed to import schedule '{schedule.Name}' (ID: {schedule.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         failedCount++;
                     }
@@ -4257,7 +4257,7 @@ public class MigrateCommandModule : ICommandModule
                         AnsiConsole.MarkupLine($"[red]✗ Failed to import task '{task.Action}' (ID: {task.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
-                            AnsiConsole.MarkupLine($"[dim]  Error: {response.ErrorMessage}[/]");
+                            AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
                         }
                         failedCount++;
                     }
@@ -4483,11 +4483,22 @@ public class MigrateCommandModule : ICommandModule
                 _progressService.SaveProgress(_migrationState);
             }
 
-            AnsiConsole.MarkupLine($"[red]✗ {stepTitle} - Failed: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]✗ {EscapeMarkup(stepTitle)} - Failed: {EscapeMarkup(ex.Message)}[/]");
             AnsiConsole.MarkupLine("[yellow]Migration stopped. Progress has been saved.[/]");
             AnsiConsole.MarkupLine($"[yellow]You can check the progress file: {_progressService?.GetProgressFilePath()}[/]");
             AnsiConsole.MarkupLine("[yellow]You can resume the migration by running the command again - it will skip completed steps.[/]");
             throw;
         }
+    }
+
+    /// <summary>
+    /// Escapes square brackets in strings to prevent Spectre.Console from interpreting them as markup.
+    /// </summary>
+    private static string EscapeMarkup(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+        
+        return text.Replace("[", "[[").Replace("]", "]]");
     }
 }
