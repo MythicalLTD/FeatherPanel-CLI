@@ -68,6 +68,27 @@ public class MigrateCommandModule : ICommandModule
             await RunMigrationWizardAsync(logger, dbLogger, maintenanceLogger, progressLogger, configManager, apiClient, confirmBlueprint, confirmMigrate, pterodactylDir, reset);
         }, confirmBlueprintOption, confirmMigrateOption, pterodactylDirOption, resetOption);
 
+        // Add check subcommand
+        var checkCommand = new Command("check", "Check if Pterodactyl installation is ready for migration (without migrating)");
+        
+        var checkPterodactylDirOption = new Option<string?>(
+            "--pterodactyl-dir",
+            description: "Path to Pterodactyl installation directory (skips the prompt)",
+            getDefaultValue: () => null
+        );
+        
+        checkCommand.AddOption(checkPterodactylDirOption);
+        
+        checkCommand.SetHandler(async (string? pterodactylDir) =>
+        {
+            var dbLogger = serviceProvider.GetService<ILogger<PterodactylDatabaseService>>();
+            var configManager = serviceProvider.GetRequiredService<ConfigManager>();
+            var apiClient = serviceProvider.GetRequiredService<FeatherPanelApiClient>();
+            await RunReadinessCheckAsync(dbLogger, configManager, apiClient, pterodactylDir);
+        }, checkPterodactylDirOption);
+        
+        migrateCommand.AddCommand(checkCommand);
+
         return migrateCommand;
     }
 
@@ -2877,8 +2898,9 @@ public class MigrateCommandModule : ICommandModule
                         Threads = server.Threads,
                         OomDisabled = server.OomDisabled,
                         AllocationId = mappedAllocationId,
-                        NestId = server.NestId, // Keep original for mapping
-                        EggId = server.EggId, // Keep original for mapping
+                        NestId = mappedRealmId, // Use mapped realm ID
+                        EggId = server.EggId, // Keep original for mapping reference
+                        SpellId = mappedSpellId, // Use mapped spell ID
                         Startup = server.Startup,
                         Image = server.Image,
                         AllocationLimit = server.AllocationLimit,
@@ -4500,6 +4522,284 @@ public class MigrateCommandModule : ICommandModule
             AnsiConsole.MarkupLine("[yellow]You can resume the migration by running the command again - it will skip completed steps.[/]");
             throw;
         }
+    }
+
+    private async Task RunReadinessCheckAsync(
+        ILogger<PterodactylDatabaseService>? dbLogger = null,
+        ConfigManager? configManager = null,
+        FeatherPanelApiClient? apiClient = null,
+        string? pterodactylDir = null)
+    {
+        AnsiConsole.MarkupLine("[bold blue]═══════════════════════════════════════════════════════════[/]");
+        AnsiConsole.MarkupLine("[bold blue]  Pterodactyl Migration Readiness Check[/]");
+        AnsiConsole.MarkupLine("[bold blue]═══════════════════════════════════════════════════════════[/]");
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[dim]This command will check if your Pterodactyl installation is ready for migration.[/]");
+        AnsiConsole.MarkupLine("[dim]No data will be migrated during this check.[/]");
+        AnsiConsole.WriteLine();
+
+        var allChecksPassed = true;
+
+        // Get Pterodactyl installation path
+        string pterodactylPath;
+        if (!string.IsNullOrEmpty(pterodactylDir))
+        {
+            pterodactylPath = pterodactylDir;
+        }
+        else
+        {
+            pterodactylPath = AnsiConsole.Ask<string>("Enter the path to your Pterodactyl installation:");
+            if (string.IsNullOrWhiteSpace(pterodactylPath))
+            {
+                AnsiConsole.MarkupLine("[red]✗ Pterodactyl installation path is required[/]");
+                return;
+            }
+        }
+
+        // Normalize the path
+        pterodactylPath = Path.GetFullPath(pterodactylPath);
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine($"[yellow]Checking Pterodactyl installation at: {pterodactylPath}[/]");
+
+        // Check if directory exists
+        if (!Directory.Exists(pterodactylPath))
+        {
+            AnsiConsole.MarkupLine($"[red]✗ Directory does not exist: {pterodactylPath}[/]");
+            allChecksPassed = false;
+            PrintSummary(allChecksPassed);
+            return;
+        }
+
+        // Validate Pterodactyl installation
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[yellow]1. Validating Pterodactyl installation...[/]");
+        var validator = new PterodactylInstallationValidator();
+        var validationResult = validator.ValidateInstallation(pterodactylPath);
+        
+        if (!validationResult.IsValid)
+        {
+            AnsiConsole.MarkupLine($"[red]✗ Invalid Pterodactyl installation: {EscapeMarkup(validationResult.ErrorMessage)}[/]");
+            allChecksPassed = false;
+            PrintSummary(allChecksPassed);
+            return;
+        }
+
+        AnsiConsole.MarkupLine("[green]✓ Valid Pterodactyl installation detected[/]");
+
+        // Check for .blueprint directory
+        if (validator.CheckBlueprintDirectory(pterodactylPath))
+        {
+            AnsiConsole.MarkupLine("[yellow]⚠  Blueprint directory detected (.blueprint)[/]");
+            AnsiConsole.MarkupLine("[dim]  Note: Blueprint installations may require special handling[/]");
+        }
+
+        // Read and parse .env file
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[yellow]2. Reading configuration from .env file...[/]");
+        var envFilePath = Path.Combine(pterodactylPath, ".env");
+        if (!File.Exists(envFilePath))
+        {
+            AnsiConsole.MarkupLine($"[red]✗ .env file not found at: {envFilePath}[/]");
+            allChecksPassed = false;
+            PrintSummary(allChecksPassed);
+            return;
+        }
+
+        var configLoader = new ConfigurationLoader();
+        PterodactylConfig? pterodactylConfig;
+        
+        try
+        {
+            pterodactylConfig = configLoader.LoadFromEnvFile(envFilePath);
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]✗ Failed to load configuration: {EscapeMarkup(ex.Message)}[/]");
+            allChecksPassed = false;
+            PrintSummary(allChecksPassed);
+            return;
+        }
+
+        AnsiConsole.MarkupLine("[green]✓ Configuration loaded successfully[/]");
+
+        // Display configuration (masking sensitive data)
+        var configDisplay = new ConfigurationDisplay();
+        configDisplay.DisplayConfiguration(pterodactylConfig);
+
+        // Test database connection
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[yellow]3. Testing database connection...[/]");
+        var dbService = new PterodactylDatabaseService(dbLogger);
+        
+        try
+        {
+            var connectionTest = await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(Style.Parse("yellow"))
+                .StartAsync("Connecting to database...", async ctx =>
+                {
+                    return await dbService.TestConnectionAsync(pterodactylConfig);
+                });
+
+            if (connectionTest)
+            {
+                AnsiConsole.MarkupLine("[green]✓ Successfully connected to Pterodactyl database[/]");
+            }
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]✗ Failed to connect to database: {EscapeMarkup(ex.Message)}[/]");
+            AnsiConsole.MarkupLine("[yellow]Please verify your database credentials in the .env file[/]");
+            allChecksPassed = false;
+            PrintSummary(allChecksPassed);
+            return;
+        }
+
+        // Check for required tables
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[yellow]4. Checking for required database tables...[/]");
+        
+        try
+        {
+            var tableCheckResult = await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(Style.Parse("yellow"))
+                .StartAsync("Checking tables...", async ctx =>
+                {
+                    return await dbService.CheckRequiredTablesAsync(pterodactylConfig);
+                });
+
+            if (tableCheckResult.AllTablesExist)
+            {
+                AnsiConsole.MarkupLine($"[green]✓ All {tableCheckResult.ExistingTables.Count} required tables found[/]");
+            }
+            else
+            {
+                AnsiConsole.MarkupLine($"[yellow]⚠  Found {tableCheckResult.ExistingTables.Count} of {PterodactylDatabaseService.GetRequiredTables().Length} required tables[/]");
+                AnsiConsole.MarkupLine($"[red]✗ Missing {tableCheckResult.MissingTables.Count} required table(s):[/]");
+                
+                foreach (var missingTable in tableCheckResult.MissingTables)
+                {
+                    AnsiConsole.MarkupLine($"[red]  - {missingTable}[/]");
+                }
+                
+                allChecksPassed = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]✗ Failed to check required tables: {EscapeMarkup(ex.Message)}[/]");
+            AnsiConsole.MarkupLine("[yellow]Please verify your database connection and permissions[/]");
+            allChecksPassed = false;
+        }
+
+        // Read application settings
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[yellow]5. Reading application settings...[/]");
+        
+        try
+        {
+            var appName = await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(Style.Parse("yellow"))
+                .StartAsync("Loading settings...", async ctx =>
+                {
+                    return await dbService.GetSettingValueAsync(pterodactylConfig, "settings::app:name");
+                });
+
+            if (!string.IsNullOrEmpty(appName))
+            {
+                AnsiConsole.MarkupLine($"[green]✓ Pterodactyl Panel Name: [bold]{appName}[/][/]");
+            }
+            else
+            {
+                AnsiConsole.MarkupLine("[yellow]⚠  App name not found in settings (settings::app:name)[/]");
+            }
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[yellow]⚠  Could not read app name: {EscapeMarkup(ex.Message)}[/]");
+            // Don't fail the check if we can't read the app name
+        }
+
+        // Check FeatherPanel API connection (optional but recommended)
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[yellow]6. Checking FeatherPanel API connection...[/]");
+        
+        if (configManager != null && apiClient != null)
+        {
+            try
+            {
+                var isConfigured = await configManager.IsConfiguredAsync();
+                if (!isConfigured)
+                {
+                    AnsiConsole.MarkupLine("[yellow]⚠  FeatherPanel API not configured[/]");
+                    AnsiConsole.MarkupLine("[dim]  Run 'feathercli config setup' to configure the API connection[/]");
+                }
+                else
+                {
+                    var connectionValid = await AnsiConsole.Status()
+                        .Spinner(Spinner.Known.Dots)
+                        .SpinnerStyle(Style.Parse("yellow"))
+                        .StartAsync("Connecting to FeatherPanel...", async ctx =>
+                        {
+                            return await apiClient.ValidateConnectionAsync();
+                        });
+
+                    if (connectionValid)
+                    {
+                        var session = await apiClient.GetUserSessionAsync();
+                        if (session?.UserInfo != null)
+                        {
+                            AnsiConsole.MarkupLine($"[green]✓ Connected to FeatherPanel as: [bold]{EscapeMarkup(session.UserInfo.Username)}[/][/]");
+                        }
+                        else
+                        {
+                            AnsiConsole.MarkupLine("[green]✓ Connected to FeatherPanel API[/]");
+                        }
+                    }
+                    else
+                    {
+                        AnsiConsole.MarkupLine("[yellow]⚠  Failed to connect to FeatherPanel API[/]");
+                        AnsiConsole.MarkupLine("[dim]  This is optional but recommended for migration[/]");
+                        AnsiConsole.MarkupLine("[dim]  Run 'feathercli config test' to verify your API configuration[/]");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[yellow]⚠  Could not check FeatherPanel API: {EscapeMarkup(ex.Message)}[/]");
+                AnsiConsole.MarkupLine("[dim]  This is optional but recommended for migration[/]");
+            }
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[yellow]⚠  FeatherPanel API check skipped (services not available)[/]");
+        }
+
+        // Print summary
+        PrintSummary(allChecksPassed);
+    }
+
+    private void PrintSummary(bool allChecksPassed)
+    {
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[bold]═══════════════════════════════════════════════════════════[/]");
+        
+        if (allChecksPassed)
+        {
+            AnsiConsole.MarkupLine("[bold green]✓ All checks passed! Your Pterodactyl installation is ready for migration.[/]");
+            AnsiConsole.MarkupLine("[dim]You can now run 'feathercli migrate' to start the migration process.[/]");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[bold red]✗ Some checks failed. Please fix the issues above before migrating.[/]");
+            AnsiConsole.MarkupLine("[dim]Once all issues are resolved, run this check again to verify.[/]");
+        }
+        
+        AnsiConsole.MarkupLine("[bold]═══════════════════════════════════════════════════════════[/]");
+        AnsiConsole.WriteLine();
     }
 
     /// <summary>

@@ -22,19 +22,33 @@ public class PterodactylDatabaseService
             throw new InvalidOperationException("Database configuration is incomplete. Required: DB_HOST, DB_DATABASE, DB_USERNAME");
         }
 
-        var port = string.IsNullOrEmpty(config.DbPort) ? "3306" : config.DbPort;
         var password = config.DbPassword ?? "";
 
         var builder = new MySqlConnectionStringBuilder
         {
-            Server = config.DbHost,
-            Port = uint.Parse(port),
             Database = config.DbDatabase,
             UserID = config.DbUsername,
             Password = password,
             AllowUserVariables = true,
             AllowLoadLocalInfile = false
         };
+
+        // Check if DB_HOST is a Unix socket path (starts with /)
+        // This matches Laravel/PHP behavior where socket paths are used directly
+        if (config.DbHost.StartsWith("/"))
+        {
+            // Unix socket connection - use the socket path directly
+            // MySqlConnector will automatically detect this as a socket path
+            builder.Server = config.DbHost;
+            // Don't set Port for Unix socket connections
+        }
+        else
+        {
+            // TCP/IP connection
+            builder.Server = config.DbHost;
+            var port = string.IsNullOrEmpty(config.DbPort) ? "3306" : config.DbPort;
+            builder.Port = uint.Parse(port);
+        }
 
         return builder.ConnectionString;
     }

@@ -91,6 +91,9 @@ public class ServerData
     [JsonProperty("egg_id")]
     public int EggId { get; set; }
 
+    [JsonProperty("spell_id")]
+    public int? SpellId { get; set; }
+
     [JsonProperty("startup")]
     public string? Startup { get; set; }
 
