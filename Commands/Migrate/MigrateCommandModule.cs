@@ -1,5 +1,4 @@
 using System.CommandLine;
-using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using FeatherCli.Core.Commands;
@@ -1831,6 +1830,8 @@ public class MigrateCommandModule : ICommandModule
             var importedCount = 0;
             var failedCount = 0;
             var importedDatabaseHostIds = new List<int>();
+            var successfullyImportedPterodactylDatabaseHostIds = new List<int>();
+            var databaseHostToDatabaseHostMapping = new Dictionary<string, int>();
 
             foreach (var host in hosts)
             {
@@ -1921,6 +1922,9 @@ public class MigrateCommandModule : ICommandModule
                             }
                             importedCount++;
                             importedDatabaseHostIds.Add(databaseId);
+                            successfullyImportedPterodactylDatabaseHostIds.Add(host.Id);
+                            // Build mapping correctly: map Pterodactyl host ID to imported database host ID
+                            databaseHostToDatabaseHostMapping[host.Id.ToString()] = databaseId;
                         }
                         else
                         {
@@ -1943,13 +1947,6 @@ public class MigrateCommandModule : ICommandModule
                 AnsiConsole.MarkupLine($"[yellow]⚠  Failed to import {failedCount} database host(s)[/]");
             }
 
-            // Build database host mapping
-            var databaseHostToDatabaseHostMapping = new Dictionary<string, int>();
-            for (int i = 0; i < importedDatabaseHostIds.Count && i < hosts.Count; i++)
-            {
-                databaseHostToDatabaseHostMapping[hosts[i].Id.ToString()] = importedDatabaseHostIds[i];
-            }
-
             return new Dictionary<string, object>
             {
                 ["database_hosts_count"] = hosts.Count,
@@ -1957,6 +1954,7 @@ public class MigrateCommandModule : ICommandModule
                 ["failed_count"] = failedCount,
                 ["imported_database_host_ids"] = importedDatabaseHostIds,
                 ["pterodactyl_database_host_ids"] = hosts.Select(h => h.Id).ToList(),
+                ["successfully_imported_pterodactyl_database_host_ids"] = successfullyImportedPterodactylDatabaseHostIds,
                 ["database_host_to_database_host_mapping"] = databaseHostToDatabaseHostMapping
             };
         });
@@ -3191,13 +3189,13 @@ public class MigrateCommandModule : ICommandModule
                 }
                 else
                 {
-                    // Fallback: rebuild from imported_database_host_ids and pterodactyl_database_host_ids
-                    if (_migrationState.StepDetails.TryGetValue("imported_database_host_ids", out var importedIdsObj) &&
-                        _migrationState.StepDetails.TryGetValue("pterodactyl_database_host_ids", out var pteroIdsObj))
-                    {
-                        List<int>? importedList = null;
-                        List<int>? pteroList = null;
+                    // Fallback: rebuild from imported_database_host_ids and successfully_imported_pterodactyl_database_host_ids (preferred)
+                    // or from imported_database_host_ids and pterodactyl_database_host_ids (if all hosts were imported)
+                    List<int>? importedList = null;
+                    List<int>? pteroList = null;
 
+                    if (_migrationState.StepDetails.TryGetValue("imported_database_host_ids", out var importedIdsObj))
+                    {
                         if (importedIdsObj is JsonElement importedJson)
                         {
                             importedList = JsonSerializer.Deserialize<List<int>>(importedJson.GetRawText());
@@ -3206,7 +3204,27 @@ public class MigrateCommandModule : ICommandModule
                         {
                             importedList = importedObjList.Select(x => Convert.ToInt32(x)).ToList();
                         }
+                    }
 
+                    // Try to get successfully imported Pterodactyl database host IDs first
+                    if (_migrationState.StepDetails.TryGetValue("successfully_imported_pterodactyl_database_host_ids", out var successfulPteroIdsObj))
+                    {
+                        if (successfulPteroIdsObj is JsonElement successfulPteroJson)
+                        {
+                            pteroList = JsonSerializer.Deserialize<List<int>>(successfulPteroJson.GetRawText());
+                        }
+                        else if (successfulPteroIdsObj is List<object> successfulPteroObjList)
+                        {
+                            pteroList = successfulPteroObjList.Select(x => Convert.ToInt32(x)).ToList();
+                        }
+                        else if (successfulPteroIdsObj is List<int> successfulPteroIntList)
+                        {
+                            pteroList = successfulPteroIntList;
+                        }
+                    }
+                    // Fallback to all Pterodactyl database host IDs if the successful list doesn't exist
+                    else if (_migrationState.StepDetails.TryGetValue("pterodactyl_database_host_ids", out var pteroIdsObj))
+                    {
                         if (pteroIdsObj is JsonElement pteroJson)
                         {
                             pteroList = JsonSerializer.Deserialize<List<int>>(pteroJson.GetRawText());
@@ -3215,13 +3233,13 @@ public class MigrateCommandModule : ICommandModule
                         {
                             pteroList = pteroObjList.Select(x => Convert.ToInt32(x)).ToList();
                         }
+                    }
 
-                        if (importedList != null && pteroList != null && importedList.Count == pteroList.Count)
+                    if (importedList != null && pteroList != null && importedList.Count == pteroList.Count)
+                    {
+                        for (int i = 0; i < importedList.Count; i++)
                         {
-                            for (int i = 0; i < importedList.Count; i++)
-                            {
-                                databaseHostToDatabaseHostMapping[pteroList[i].ToString()] = importedList[i];
-                            }
+                            databaseHostToDatabaseHostMapping[pteroList[i].ToString()] = importedList[i];
                         }
                     }
                 }
@@ -3233,10 +3251,36 @@ public class MigrateCommandModule : ICommandModule
                 throw new Exception("Server mapping not found. Please import servers first.");
             }
 
+            // Check if database hosts step was completed
+            bool databaseHostsStepCompleted = _migrationState?.CompletedSteps.Contains("import_database_hosts") == true;
+            
             if (databaseHostToDatabaseHostMapping.Count == 0)
             {
-                AnsiConsole.MarkupLine("[red]✗ Database host mapping not found. Please import database hosts first.[/]");
-                throw new Exception("Database host mapping not found. Please import database hosts first.");
+                if (databaseHostsStepCompleted)
+                {
+                    // Step was completed but mapping is empty - check if there are any databases that need hosts
+                    bool hasDatabasesNeedingHosts = databases.Any(db => db.DatabaseHostId > 0);
+                    
+                    if (hasDatabasesNeedingHosts)
+                    {
+                        AnsiConsole.MarkupLine("[red]✗ Database host mapping not found, but databases require database hosts.[/]");
+                        AnsiConsole.MarkupLine("[yellow]The 'import_database_hosts' step was completed, but no database host mappings were found.[/]");
+                        AnsiConsole.MarkupLine("[yellow]This may indicate that no database hosts were successfully imported.[/]");
+                        AnsiConsole.MarkupLine("[yellow]Please check the migration progress and ensure database hosts were imported successfully.[/]");
+                        throw new Exception("Database host mapping not found. Database hosts step was completed but no mappings exist. Please check if database hosts were imported successfully.");
+                    }
+                    else
+                    {
+                        // No databases need hosts, so empty mapping is OK
+                        AnsiConsole.MarkupLine("[yellow]⚠  No database host mapping found, but no databases require database hosts. Continuing...[/]");
+                    }
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine("[red]✗ Database host mapping not found. Please import database hosts first.[/]");
+                    AnsiConsole.MarkupLine("[yellow]The 'import_database_hosts' step must be completed before importing server databases.[/]");
+                    throw new Exception("Database host mapping not found. Please import database hosts first.");
+                }
             }
 
             // Initialize decryptor for server database passwords
