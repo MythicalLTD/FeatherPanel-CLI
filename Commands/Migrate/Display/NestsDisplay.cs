@@ -29,9 +29,9 @@ public class NestsDisplay
             var nest = nests[i];
             table.AddRow(
                 nest.Id.ToString(),
-                nest.Name,
-                nest.Author,
-                nest.Description ?? "[dim]NULL[/]",
+                Markup.Escape(nest.Name ?? ""),
+                Markup.Escape(nest.Author ?? ""),
+                nest.Description != null ? Markup.Escape(nest.Description) : "[dim]NULL[/]",
                 nest.CreatedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "[dim]NULL[/]"
             );
         }

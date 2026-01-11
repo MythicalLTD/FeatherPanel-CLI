@@ -31,8 +31,8 @@ public static class TasksDisplay
                 task.Id.ToString(),
                 task.ScheduleId.ToString(),
                 task.SequenceId.ToString(),
-                task.Action,
-                payload,
+                Markup.Escape(task.Action ?? ""),
+                Markup.Escape(payload ?? ""),
                 task.TimeOffset.ToString() + "s"
             );
         }

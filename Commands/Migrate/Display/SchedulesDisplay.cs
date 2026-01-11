@@ -27,11 +27,13 @@ public static class SchedulesDisplay
             var schedule = schedules[i];
             var cronExpr = $"{schedule.CronMinute} {schedule.CronHour} {schedule.CronDayOfMonth} {schedule.CronMonth} {schedule.CronDayOfWeek}";
             
+            var nameDisplay = schedule.Name.Length > 30 ? schedule.Name.Substring(0, 27) + "..." : schedule.Name;
+            var cronDisplay = cronExpr.Length > 30 ? cronExpr.Substring(0, 27) + "..." : cronExpr;
             table.AddRow(
                 schedule.Id.ToString(),
                 schedule.ServerId.ToString(),
-                schedule.Name.Length > 30 ? schedule.Name.Substring(0, 27) + "..." : schedule.Name,
-                cronExpr.Length > 30 ? cronExpr.Substring(0, 27) + "..." : cronExpr,
+                Markup.Escape(nameDisplay ?? ""),
+                Markup.Escape(cronDisplay),
                 schedule.IsActive ? "✓" : "✗",
                 schedule.CreatedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "N/A"
             );

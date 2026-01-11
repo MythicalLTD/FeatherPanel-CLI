@@ -26,8 +26,8 @@ public class SshKeysDisplay
             table.AddRow(
                 sshKey.Id.ToString(),
                 sshKey.UserId.ToString(),
-                sshKey.Name,
-                sshKey.Fingerprint
+                Markup.Escape(sshKey.Name ?? ""),
+                Markup.Escape(sshKey.Fingerprint ?? "")
             );
         }
 

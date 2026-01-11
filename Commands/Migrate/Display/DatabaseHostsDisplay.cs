@@ -27,10 +27,10 @@ public class DatabaseHostsDisplay
             var host = hosts[i];
             table.AddRow(
                 host.Id.ToString(),
-                host.Name,
-                host.Host,
+                Markup.Escape(host.Name ?? ""),
+                Markup.Escape(host.Host ?? ""),
                 host.Port.ToString(),
-                host.Username,
+                Markup.Escape(host.Username ?? ""),
                 host.NodeId?.ToString() ?? "N/A"
             );
         }

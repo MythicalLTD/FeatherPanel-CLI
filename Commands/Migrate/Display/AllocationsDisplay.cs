@@ -27,11 +27,11 @@ public class AllocationsDisplay
             var allocation = allocations[i];
             table.AddRow(
                 allocation.Id.ToString(),
-                allocation.Ip,
+                Markup.Escape(allocation.Ip ?? ""),
                 allocation.Port.ToString(),
                 allocation.NodeId.ToString(),
                 allocation.ServerId?.ToString() ?? "N/A",
-                allocation.IpAlias ?? "N/A"
+                Markup.Escape(allocation.IpAlias ?? "N/A")
             );
         }
 

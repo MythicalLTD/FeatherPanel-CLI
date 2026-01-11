@@ -26,11 +26,12 @@ public static class BackupsDisplay
         {
             var backup = backups[i];
             var sizeMb = backup.Bytes / (1024.0 * 1024.0);
+            var nameDisplay = backup.Name.Length > 30 ? backup.Name.Substring(0, 27) + "..." : backup.Name;
             table.AddRow(
                 backup.Id.ToString(),
                 backup.ServerId.ToString(),
-                backup.Name.Length > 30 ? backup.Name.Substring(0, 27) + "..." : backup.Name,
-                backup.Uuid.Substring(0, 8) + "...",
+                Markup.Escape(nameDisplay ?? ""),
+                Markup.Escape(backup.Uuid.Substring(0, 8) + "..."),
                 $"{sizeMb:F2}",
                 backup.IsSuccessful ? "✓" : "✗"
             );

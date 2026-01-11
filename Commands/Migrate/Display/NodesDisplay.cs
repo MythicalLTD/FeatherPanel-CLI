@@ -27,8 +27,8 @@ public class NodesDisplay
             var node = nodes[i];
             table.AddRow(
                 node.Id.ToString(),
-                node.Name,
-                node.Fqdn,
+                Markup.Escape(node.Name ?? ""),
+                Markup.Escape(node.Fqdn ?? ""),
                 node.LocationId.ToString(),
                 $"{node.Memory} MB",
                 $"{node.Disk} MB"

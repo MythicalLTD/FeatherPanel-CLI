@@ -28,12 +28,12 @@ public class ServersDisplay
             var server = servers[i];
             table.AddRow(
                 server.Id.ToString(),
-                server.Name,
+                Markup.Escape(server.Name ?? ""),
                 server.OwnerId.ToString(),
                 server.NodeId.ToString(),
                 server.NestId.ToString(),
                 server.EggId.ToString(),
-                server.Status ?? "N/A"
+                Markup.Escape(server.Status ?? "N/A")
             );
         }
 

@@ -29,9 +29,9 @@ public class EggsDisplay
             var egg = eggs[i];
             table.AddRow(
                 egg.Id.ToString(),
-                egg.Name,
+                Markup.Escape(egg.Name ?? ""),
                 egg.NestId.ToString(),
-                egg.Author,
+                Markup.Escape(egg.Author ?? ""),
                 egg.Variables.Count.ToString()
             );
         }

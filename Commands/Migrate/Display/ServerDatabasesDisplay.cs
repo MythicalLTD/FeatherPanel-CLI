@@ -28,8 +28,8 @@ public static class ServerDatabasesDisplay
                 db.Id.ToString(),
                 db.ServerId.ToString(),
                 db.DatabaseHostId.ToString(),
-                db.Database,
-                db.Username
+                Markup.Escape(db.Database ?? ""),
+                Markup.Escape(db.Username ?? "")
             );
         }
 

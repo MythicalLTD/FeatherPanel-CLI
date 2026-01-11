@@ -28,8 +28,8 @@ public class LocationsDisplay
             var location = locations[i];
             table.AddRow(
                 location.Id.ToString(),
-                location.Short,
-                location.Long ?? "[dim]NULL[/]",
+                Markup.Escape(location.Short ?? ""),
+                location.Long != null ? Markup.Escape(location.Long) : "[dim]NULL[/]",
                 location.CreatedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "[dim]NULL[/]"
             );
         }

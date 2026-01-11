@@ -31,9 +31,9 @@ public class UsersDisplay
             
             table.AddRow(
                 user.Id.ToString(),
-                user.Username,
-                user.Email,
-                fullName,
+                Markup.Escape(user.Username ?? ""),
+                Markup.Escape(user.Email ?? ""),
+                Markup.Escape(fullName),
                 user.RootAdmin ? "[green]Yes[/]" : "[dim]No[/]",
                 user.UseTotp ? "[green]Yes[/]" : "[dim]No[/]"
             );
