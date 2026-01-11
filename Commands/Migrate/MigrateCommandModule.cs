@@ -2862,20 +2862,8 @@ public class MigrateCommandModule : ICommandModule
                     var mappedAllocationId = allocationToAllocationMapping[server.AllocationId.ToString()];
                     var mappedSpellId = eggToSpellMapping[server.EggId.ToString()];
 
-                    // Map parent_id if present
-                    int? mappedParentId = null;
-                    if (server.ParentId.HasValue)
-                    {
-                        if (serverToServerMapping.ContainsKey(server.ParentId.Value.ToString()))
-                        {
-                            mappedParentId = serverToServerMapping[server.ParentId.Value.ToString()];
-                        }
-                        else
-                        {
-                            // Use original parent_id if not yet mapped (might be imported later or doesn't exist)
-                            mappedParentId = server.ParentId.Value;
-                        }
-                    }
+                    // Note: parent_id is not supported by FeatherPanel, so we set it to null
+                    // This prevents SQL errors when importing servers
 
                     var serverData = new Models.ServerData
                     {
@@ -2904,7 +2892,6 @@ public class MigrateCommandModule : ICommandModule
                         AllocationLimit = server.AllocationLimit,
                         DatabaseLimit = server.DatabaseLimit,
                         BackupLimit = server.BackupLimit,
-                        ParentId = mappedParentId,
                         ExternalId = server.ExternalId,
                         InstalledAt = server.InstalledAt?.ToString("yyyy-MM-ddTHH:mm:ss")
                     };
@@ -3356,7 +3343,7 @@ public class MigrateCommandModule : ICommandModule
 
                     if (response == null || response.Error || !response.Success)
                     {
-                        AnsiConsole.MarkupLine($"[red]✗ Failed to import server database '{database.Database}' (ID: {database.Id})[/]");
+                        AnsiConsole.MarkupLine($"[red]✗ Failed to import server database '{EscapeMarkup(database.Database ?? "")}' (ID: {database.Id})[/]");
                         if (response?.ErrorMessage != null)
                         {
                             AnsiConsole.MarkupLine($"[dim]  Error: {EscapeMarkup(response.ErrorMessage)}[/]");
@@ -4848,12 +4835,14 @@ public class MigrateCommandModule : ICommandModule
 
     /// <summary>
     /// Escapes square brackets in strings to prevent Spectre.Console from interpreting them as markup.
+    /// Uses Spectre.Console's Markup.Escape for proper escaping.
     /// </summary>
     private static string EscapeMarkup(string? text)
     {
         if (string.IsNullOrEmpty(text))
             return string.Empty;
         
-        return text.Replace("[", "[[").Replace("]", "]]");
+        // Use Spectre.Console's built-in escape method for proper markup escaping
+        return Markup.Escape(text);
     }
 }
