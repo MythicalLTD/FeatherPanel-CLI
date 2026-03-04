@@ -13,7 +13,7 @@ if (args.Contains("--version") || args.Contains("-v"))
 {
     var version = Assembly.GetExecutingAssembly()
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-        .InformationalVersion ?? "1.0.0";
+        .InformationalVersion ?? "1.1.2";
     Console.WriteLine($"FeatherCli v{version}");
     Console.WriteLine("Built with .NET 10.0");
     Console.WriteLine("https://github.com/MythicalLTD/FeatherPanel");
@@ -82,7 +82,7 @@ try
     {
         var version = Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion ?? "1.0.0";
+            .InformationalVersion ?? "1.1.2";
         AnsiConsole.MarkupLine($"[bold blue]FeatherCli v{version}[/]");
         AnsiConsole.MarkupLine("[dim]Built with .NET 9.0[/]");
         AnsiConsole.MarkupLine("[dim]https://github.com/MythicalLTD/FeatherPanel[/]");
