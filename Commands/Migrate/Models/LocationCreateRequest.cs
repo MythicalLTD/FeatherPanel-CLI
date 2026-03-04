@@ -12,5 +12,8 @@ public class LocationCreateRequest
     
     [JsonProperty("id")]
     public int? Id { get; set; } // Optional - preserve Pterodactyl location ID for migrations (WHMCS compatibility)
+
+    [JsonProperty("type")]
+    public string Type { get; set; } = "game";
 }
 

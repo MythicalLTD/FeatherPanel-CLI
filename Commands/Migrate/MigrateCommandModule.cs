@@ -862,7 +862,8 @@ public class MigrateCommandModule : ICommandModule
                     {
                         Name = location.Short,
                         Description = location.Long,
-                        Id = location.Id // Preserve Pterodactyl location ID for WHMCS and other services
+                        Id = location.Id, // Preserve Pterodactyl location ID for WHMCS and other services
+                        Type = "game"
                     };
 
                     var response = await apiClient.CreateLocationAsync(createRequest);
