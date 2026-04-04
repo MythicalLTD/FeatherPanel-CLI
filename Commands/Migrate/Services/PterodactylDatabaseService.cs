@@ -221,7 +221,7 @@ public class PterodactylDatabaseService
             {
                 settings.Add(new PterodactylSetting
                 {
-                    Id = reader.GetInt32(0),
+                    Id = ReadMysqlIntAsInt32(reader, 0, nameof(PterodactylSetting.Id)),
                     Key = reader.GetString(1),
                     Value = reader.IsDBNull(2) ? null : reader.GetString(2)
                 });
@@ -256,7 +256,7 @@ public class PterodactylDatabaseService
             {
                 locations.Add(new PterodactylLocation
                 {
-                    Id = reader.GetInt32(0),
+                    Id = ReadMysqlIntAsInt32(reader, 0, nameof(PterodactylLocation.Id)),
                     Short = reader.GetString(1),
                     Long = reader.IsDBNull(2) ? null : reader.GetString(2),
                     CreatedAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3),
@@ -293,7 +293,7 @@ public class PterodactylDatabaseService
             {
                 nests.Add(new PterodactylNest
                 {
-                    Id = reader.GetInt32(0),
+                    Id = ReadMysqlIntAsInt32(reader, 0, nameof(PterodactylNest.Id)),
                     Uuid = reader.GetGuid(1).ToString(),
                     Author = reader.GetString(2),
                     Name = reader.GetString(3),
@@ -333,9 +333,9 @@ public class PterodactylDatabaseService
             {
                 var egg = new PterodactylEgg
                 {
-                    Id = eggsReader.GetInt32(0),
+                    Id = ReadMysqlIntAsInt32(eggsReader, 0, nameof(PterodactylEgg.Id)),
                     Uuid = eggsReader.GetGuid(1).ToString(),
-                    NestId = eggsReader.GetInt32(2),
+                    NestId = ReadMysqlIntAsInt32(eggsReader, 2, nameof(PterodactylEgg.NestId)),
                     Author = eggsReader.GetString(3),
                     Name = eggsReader.GetString(4),
                     Description = eggsReader.IsDBNull(5) ? null : eggsReader.GetString(5),
@@ -347,10 +347,10 @@ public class PterodactylDatabaseService
                     ConfigStartup = eggsReader.IsDBNull(11) ? null : eggsReader.GetString(11),
                     ConfigLogs = eggsReader.IsDBNull(12) ? null : eggsReader.GetString(12),
                     ConfigStop = eggsReader.IsDBNull(13) ? null : eggsReader.GetString(13),
-                    ConfigFrom = eggsReader.IsDBNull(14) ? null : eggsReader.GetInt32(14),
+                    ConfigFrom = ReadMysqlIntAsInt32OrNull(eggsReader, 14, nameof(PterodactylEgg.ConfigFrom)),
                     Startup = eggsReader.IsDBNull(15) ? null : eggsReader.GetString(15),
                     ScriptContainer = eggsReader.GetString(16),
-                    CopyScriptFrom = eggsReader.IsDBNull(17) ? null : eggsReader.GetInt32(17),
+                    CopyScriptFrom = ReadMysqlIntAsInt32OrNull(eggsReader, 17, nameof(PterodactylEgg.CopyScriptFrom)),
                     ScriptEntry = eggsReader.GetString(18),
                     ScriptIsPrivileged = eggsReader.GetBoolean(19),
                     ScriptInstall = eggsReader.IsDBNull(20) ? null : eggsReader.GetString(20),
@@ -379,8 +379,8 @@ public class PterodactylDatabaseService
                 {
                     egg.Variables.Add(new PterodactylEggVariable
                     {
-                        Id = varsReader.GetInt32(0),
-                        EggId = varsReader.GetInt32(1),
+                        Id = ReadMysqlIntAsInt32(varsReader, 0, nameof(PterodactylEggVariable.Id)),
+                        EggId = ReadMysqlIntAsInt32(varsReader, 1, nameof(PterodactylEggVariable.EggId)),
                         Name = varsReader.GetString(2),
                         Description = varsReader.GetString(3),
                         EnvVariable = varsReader.GetString(4),
@@ -423,25 +423,29 @@ public class PterodactylDatabaseService
             {
                 nodes.Add(new PterodactylNode
                 {
-                    Id = reader.GetInt32(0),
+                    Id = ReadMysqlIntAsInt32(reader, 0, nameof(PterodactylNode.Id)),
                     Uuid = reader.GetGuid(1).ToString(),
                     Public = reader.GetBoolean(2),
                     Name = reader.GetString(3),
                     Description = reader.IsDBNull(4) ? null : reader.GetString(4),
-                    LocationId = reader.GetInt32(5),
+                    LocationId = ReadMysqlIntAsInt32(reader, 5, nameof(PterodactylNode.LocationId)),
                     Fqdn = reader.GetString(6),
                     Scheme = reader.GetString(7),
                     BehindProxy = reader.GetBoolean(8),
                     MaintenanceMode = reader.GetBoolean(9),
-                    Memory = reader.GetInt32(10),
-                    MemoryOverallocate = reader.GetInt32(11),
-                    Disk = reader.GetInt32(12),
-                    DiskOverallocate = reader.GetInt32(13),
-                    UploadSize = reader.GetInt32(14),
+                    Memory = ReadMysqlIntAsInt32(reader, 10, nameof(PterodactylNode.Memory)),
+                    MemoryOverallocate = reader.IsDBNull(11)
+                        ? 0
+                        : ReadMysqlIntAsInt32(reader, 11, nameof(PterodactylNode.MemoryOverallocate)),
+                    Disk = ReadMysqlIntAsInt32(reader, 12, nameof(PterodactylNode.Disk)),
+                    DiskOverallocate = reader.IsDBNull(13)
+                        ? 0
+                        : ReadMysqlIntAsInt32(reader, 13, nameof(PterodactylNode.DiskOverallocate)),
+                    UploadSize = ReadMysqlIntAsInt32(reader, 14, nameof(PterodactylNode.UploadSize)),
                     DaemonTokenId = reader.GetString(15),
                     DaemonToken = reader.GetString(16), // Encrypted
-                    DaemonListen = reader.GetInt32(17),
-                    DaemonSFTP = reader.GetInt32(18),
+                    DaemonListen = ReadMysqlIntAsInt32(reader, 17, nameof(PterodactylNode.DaemonListen)),
+                    DaemonSFTP = ReadMysqlIntAsInt32(reader, 18, nameof(PterodactylNode.DaemonSFTP)),
                     DaemonBase = reader.GetString(19),
                     CreatedAt = reader.IsDBNull(20) ? null : reader.GetDateTime(20),
                     UpdatedAt = reader.IsDBNull(21) ? null : reader.GetDateTime(21)
@@ -477,14 +481,14 @@ public class PterodactylDatabaseService
             {
                 hosts.Add(new PterodactylDatabaseHost
                 {
-                    Id = reader.GetInt32(0),
+                    Id = ReadMysqlIntAsInt32(reader, 0, nameof(PterodactylDatabaseHost.Id)),
                     Name = reader.GetString(1),
                     Host = reader.GetString(2),
-                    Port = reader.GetInt32(3),
+                    Port = ReadMysqlIntAsInt32(reader, 3, nameof(PterodactylDatabaseHost.Port)),
                     Username = reader.GetString(4),
                     Password = reader.GetString(5), // Encrypted
-                    MaxDatabases = reader.IsDBNull(6) ? null : reader.GetInt32(6),
-                    NodeId = reader.IsDBNull(7) ? null : reader.GetInt32(7),
+                    MaxDatabases = ReadMysqlIntAsInt32OrNull(reader, 6, nameof(PterodactylDatabaseHost.MaxDatabases)),
+                    NodeId = ReadMysqlIntAsInt32OrNull(reader, 7, nameof(PterodactylDatabaseHost.NodeId)),
                     CreatedAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8),
                     UpdatedAt = reader.IsDBNull(9) ? null : reader.GetDateTime(9)
                 });
@@ -519,12 +523,12 @@ public class PterodactylDatabaseService
             {
                 allocations.Add(new PterodactylAllocation
                 {
-                    Id = reader.GetInt32(0),
-                    NodeId = reader.GetInt32(1),
+                    Id = ReadMysqlIntAsInt32(reader, 0, nameof(PterodactylAllocation.Id)),
+                    NodeId = ReadMysqlIntAsInt32(reader, 1, nameof(PterodactylAllocation.NodeId)),
                     Ip = reader.GetString(2),
                     IpAlias = reader.IsDBNull(3) ? null : reader.GetString(3),
-                    Port = reader.GetInt32(4),
-                    ServerId = reader.IsDBNull(5) ? null : reader.GetInt32(5),
+                    Port = ReadMysqlIntAsInt32(reader, 4, nameof(PterodactylAllocation.Port)),
+                    ServerId = ReadMysqlIntAsInt32OrNull(reader, 5, nameof(PterodactylAllocation.ServerId)),
                     Notes = reader.IsDBNull(6) ? null : reader.GetString(6),
                     CreatedAt = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
                     UpdatedAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8)
@@ -560,7 +564,7 @@ public class PterodactylDatabaseService
             {
                 users.Add(new PterodactylUser
                 {
-                    Id = reader.GetInt32(0),
+                    Id = ReadMysqlIntAsInt32(reader, 0, nameof(PterodactylUser.Id)),
                     Uuid = reader.GetGuid(1).ToString(), // UUID is stored as GUID in database
                     Username = reader.GetString(2),
                     Email = reader.GetString(3),
@@ -607,8 +611,8 @@ public class PterodactylDatabaseService
             {
                 sshKeys.Add(new PterodactylSshKey
                 {
-                    Id = reader.GetInt32(0),
-                    UserId = reader.GetInt32(1),
+                    Id = ReadMysqlIntAsInt32(reader, 0, nameof(PterodactylSshKey.Id)),
+                    UserId = ReadMysqlIntAsInt32(reader, 1, nameof(PterodactylSshKey.UserId)),
                     Name = reader.GetString(2),
                     Fingerprint = reader.GetString(3),
                     PublicKey = reader.GetString(4),
@@ -673,35 +677,35 @@ public class PterodactylDatabaseService
                 if (hasParentIdColumn)
                 {
                     var parentIdOrdinal = reader.GetOrdinal("parent_id");
-                    parentId = reader.IsDBNull(parentIdOrdinal) ? null : reader.GetInt32(parentIdOrdinal);
+                    parentId = ReadMysqlIntAsInt32OrNull(reader, parentIdOrdinal, nameof(PterodactylServer.ParentId));
                 }
                 
                 servers.Add(new PterodactylServer
                 {
-                    Id = reader.GetInt32(reader.GetOrdinal("id")),
+                    Id = ReadMysqlIntAsInt32(reader, "id", nameof(PterodactylServer.Id)),
                     Uuid = reader.GetGuid(reader.GetOrdinal("uuid")).ToString(), // UUID is stored as GUID
                     UuidShort = reader.GetString(reader.GetOrdinal("uuidShort")),
-                    NodeId = reader.GetInt32(reader.GetOrdinal("node_id")),
+                    NodeId = ReadMysqlIntAsInt32(reader, "node_id", nameof(PterodactylServer.NodeId)),
                     Name = reader.GetString(reader.GetOrdinal("name")),
                     Description = reader.IsDBNull(reader.GetOrdinal("description")) ? null : reader.GetString(reader.GetOrdinal("description")),
                     Status = reader.IsDBNull(reader.GetOrdinal("status")) ? null : reader.GetString(reader.GetOrdinal("status")),
                     SkipScripts = reader.GetBoolean(reader.GetOrdinal("skip_scripts")),
-                    OwnerId = reader.GetInt32(reader.GetOrdinal("owner_id")),
-                    Memory = reader.GetInt32(reader.GetOrdinal("memory")),
-                    Swap = reader.GetInt32(reader.GetOrdinal("swap")),
-                    Disk = reader.GetInt32(reader.GetOrdinal("disk")),
-                    Io = reader.GetInt32(reader.GetOrdinal("io")),
-                    Cpu = reader.GetInt32(reader.GetOrdinal("cpu")),
+                    OwnerId = ReadMysqlIntAsInt32(reader, "owner_id", nameof(PterodactylServer.OwnerId)),
+                    Memory = ReadMysqlIntAsInt32(reader, "memory", nameof(PterodactylServer.Memory)),
+                    Swap = ReadMysqlIntAsInt32(reader, "swap", nameof(PterodactylServer.Swap)),
+                    Disk = ReadMysqlIntAsInt32(reader, "disk", nameof(PterodactylServer.Disk)),
+                    Io = ReadMysqlIntAsInt32(reader, "io", nameof(PterodactylServer.Io)),
+                    Cpu = ReadMysqlIntAsInt32(reader, "cpu", nameof(PterodactylServer.Cpu)),
                     Threads = reader.IsDBNull(reader.GetOrdinal("threads")) ? null : reader.GetString(reader.GetOrdinal("threads")),
                     OomDisabled = reader.GetBoolean(reader.GetOrdinal("oom_disabled")),
-                    AllocationId = reader.GetInt32(reader.GetOrdinal("allocation_id")),
-                    NestId = reader.GetInt32(reader.GetOrdinal("nest_id")),
-                    EggId = reader.GetInt32(reader.GetOrdinal("egg_id")),
+                    AllocationId = ReadMysqlIntAsInt32(reader, "allocation_id", nameof(PterodactylServer.AllocationId)),
+                    NestId = ReadMysqlIntAsInt32(reader, "nest_id", nameof(PterodactylServer.NestId)),
+                    EggId = ReadMysqlIntAsInt32(reader, "egg_id", nameof(PterodactylServer.EggId)),
                     Startup = reader.GetString(reader.GetOrdinal("startup")),
                     Image = reader.GetString(reader.GetOrdinal("image")),
-                    AllocationLimit = reader.IsDBNull(reader.GetOrdinal("allocation_limit")) ? null : reader.GetInt32(reader.GetOrdinal("allocation_limit")),
-                    DatabaseLimit = reader.GetInt32(reader.GetOrdinal("database_limit")),
-                    BackupLimit = reader.GetInt32(reader.GetOrdinal("backup_limit")),
+                    AllocationLimit = ReadMysqlIntAsInt32OrNull(reader, "allocation_limit", nameof(PterodactylServer.AllocationLimit)),
+                    DatabaseLimit = ReadMysqlIntAsInt32(reader, "database_limit", nameof(PterodactylServer.DatabaseLimit)),
+                    BackupLimit = ReadMysqlIntAsInt32(reader, "backup_limit", nameof(PterodactylServer.BackupLimit)),
                     ParentId = parentId,
                     ExternalId = reader.IsDBNull(reader.GetOrdinal("external_id")) ? null : reader.GetString(reader.GetOrdinal("external_id")),
                     InstalledAt = reader.IsDBNull(reader.GetOrdinal("installed_at")) ? null : reader.GetDateTime(reader.GetOrdinal("installed_at")),
@@ -741,9 +745,9 @@ public class PterodactylDatabaseService
             {
                 variables.Add(new PterodactylServerVariable
                 {
-                    Id = reader.GetInt32(0),
-                    ServerId = reader.GetInt32(1),
-                    VariableId = reader.GetInt32(2), // This is the egg_variable_id
+                    Id = ReadMysqlIntAsInt32(reader, 0, nameof(PterodactylServerVariable.Id)),
+                    ServerId = ReadMysqlIntAsInt32(reader, 1, nameof(PterodactylServerVariable.ServerId)),
+                    VariableId = ReadMysqlIntAsInt32(reader, 2, nameof(PterodactylServerVariable.VariableId)), // egg_variable_id
                     VariableValue = reader.GetString(3),
                     CreatedAt = reader.IsDBNull(4) ? null : reader.GetDateTime(4),
                     UpdatedAt = reader.IsDBNull(5) ? null : reader.GetDateTime(5)
@@ -778,14 +782,14 @@ public class PterodactylDatabaseService
             {
                 databases.Add(new PterodactylServerDatabase
                 {
-                    Id = reader.GetInt32(reader.GetOrdinal("id")),
-                    ServerId = reader.GetInt32(reader.GetOrdinal("server_id")),
-                    DatabaseHostId = reader.GetInt32(reader.GetOrdinal("database_host_id")),
+                    Id = ReadMysqlIntAsInt32(reader, "id", nameof(PterodactylServerDatabase.Id)),
+                    ServerId = ReadMysqlIntAsInt32(reader, "server_id", nameof(PterodactylServerDatabase.ServerId)),
+                    DatabaseHostId = ReadMysqlIntAsInt32(reader, "database_host_id", nameof(PterodactylServerDatabase.DatabaseHostId)),
                     Database = reader.GetString(reader.GetOrdinal("database")),
                     Username = reader.GetString(reader.GetOrdinal("username")),
                     Remote = reader.IsDBNull(reader.GetOrdinal("remote")) ? "%" : reader.GetString(reader.GetOrdinal("remote")),
                     Password = reader.GetString(reader.GetOrdinal("password")), // Encrypted
-                    MaxConnections = reader.IsDBNull(reader.GetOrdinal("max_connections")) ? 0 : reader.GetInt32(reader.GetOrdinal("max_connections")),
+                    MaxConnections = ReadMysqlIntAsInt32OrNull(reader, "max_connections", nameof(PterodactylServerDatabase.MaxConnections)) ?? 0,
                     CreatedAt = reader.IsDBNull(reader.GetOrdinal("created_at")) ? null : reader.GetDateTime(reader.GetOrdinal("created_at")),
                     UpdatedAt = reader.IsDBNull(reader.GetOrdinal("updated_at")) ? null : reader.GetDateTime(reader.GetOrdinal("updated_at"))
                 });
@@ -822,7 +826,7 @@ public class PterodactylDatabaseService
                 backups.Add(new PterodactylBackup
                 {
                     Id = reader.GetInt64(reader.GetOrdinal("id")),
-                    ServerId = reader.GetInt32(reader.GetOrdinal("server_id")),
+                    ServerId = ReadMysqlIntAsInt32(reader, "server_id", nameof(PterodactylBackup.ServerId)),
                     Uuid = reader.GetGuid(reader.GetOrdinal("uuid")).ToString(),
                     UploadId = reader.IsDBNull(reader.GetOrdinal("upload_id")) ? null : reader.GetString(reader.GetOrdinal("upload_id")),
                     IsSuccessful = reader.GetBoolean(reader.GetOrdinal("is_successful")),
@@ -867,9 +871,9 @@ public class PterodactylDatabaseService
             {
                 subusers.Add(new PterodactylSubuser
                 {
-                    Id = reader.GetInt32(reader.GetOrdinal("id")),
-                    UserId = reader.GetInt32(reader.GetOrdinal("user_id")),
-                    ServerId = reader.GetInt32(reader.GetOrdinal("server_id")),
+                    Id = ReadMysqlIntAsInt32(reader, "id", nameof(PterodactylSubuser.Id)),
+                    UserId = ReadMysqlIntAsInt32(reader, "user_id", nameof(PterodactylSubuser.UserId)),
+                    ServerId = ReadMysqlIntAsInt32(reader, "server_id", nameof(PterodactylSubuser.ServerId)),
                     Permissions = reader.IsDBNull(reader.GetOrdinal("permissions")) ? "[]" : reader.GetString(reader.GetOrdinal("permissions")),
                     CreatedAt = reader.IsDBNull(reader.GetOrdinal("created_at")) ? null : reader.GetDateTime(reader.GetOrdinal("created_at")),
                     UpdatedAt = reader.IsDBNull(reader.GetOrdinal("updated_at")) ? null : reader.GetDateTime(reader.GetOrdinal("updated_at"))
@@ -905,8 +909,8 @@ public class PterodactylDatabaseService
             {
                 schedules.Add(new PterodactylSchedule
                 {
-                    Id = reader.GetInt32(reader.GetOrdinal("id")),
-                    ServerId = reader.GetInt32(reader.GetOrdinal("server_id")),
+                    Id = ReadMysqlIntAsInt32(reader, "id", nameof(PterodactylSchedule.Id)),
+                    ServerId = ReadMysqlIntAsInt32(reader, "server_id", nameof(PterodactylSchedule.ServerId)),
                     Name = reader.GetString(reader.GetOrdinal("name")),
                     CronDayOfWeek = reader.GetString(reader.GetOrdinal("cron_day_of_week")),
                     CronMonth = reader.GetString(reader.GetOrdinal("cron_month")),
@@ -915,7 +919,7 @@ public class PterodactylDatabaseService
                     CronMinute = reader.GetString(reader.GetOrdinal("cron_minute")),
                     IsActive = reader.GetBoolean(reader.GetOrdinal("is_active")),
                     IsProcessing = reader.GetBoolean(reader.GetOrdinal("is_processing")),
-                    OnlyWhenOnline = reader.GetInt32(reader.GetOrdinal("only_when_online")),
+                    OnlyWhenOnline = ReadMysqlIntAsInt32(reader, "only_when_online", nameof(PterodactylSchedule.OnlyWhenOnline)),
                     LastRunAt = reader.IsDBNull(reader.GetOrdinal("last_run_at")) ? null : reader.GetDateTime(reader.GetOrdinal("last_run_at")),
                     NextRunAt = reader.IsDBNull(reader.GetOrdinal("next_run_at")) ? null : reader.GetDateTime(reader.GetOrdinal("next_run_at")),
                     CreatedAt = reader.IsDBNull(reader.GetOrdinal("created_at")) ? null : reader.GetDateTime(reader.GetOrdinal("created_at")),
@@ -952,14 +956,14 @@ public class PterodactylDatabaseService
             {
                 tasks.Add(new PterodactylTask
                 {
-                    Id = reader.GetInt32(reader.GetOrdinal("id")),
-                    ScheduleId = reader.GetInt32(reader.GetOrdinal("schedule_id")),
-                    SequenceId = reader.GetInt32(reader.GetOrdinal("sequence_id")),
+                    Id = ReadMysqlIntAsInt32(reader, "id", nameof(PterodactylTask.Id)),
+                    ScheduleId = ReadMysqlIntAsInt32(reader, "schedule_id", nameof(PterodactylTask.ScheduleId)),
+                    SequenceId = ReadMysqlIntAsInt32(reader, "sequence_id", nameof(PterodactylTask.SequenceId)),
                     Action = reader.GetString(reader.GetOrdinal("action")),
                     Payload = reader.GetString(reader.GetOrdinal("payload")),
-                    TimeOffset = reader.GetInt32(reader.GetOrdinal("time_offset")),
+                    TimeOffset = ReadMysqlIntAsInt32(reader, "time_offset", nameof(PterodactylTask.TimeOffset)),
                     IsQueued = reader.GetBoolean(reader.GetOrdinal("is_queued")),
-                    ContinueOnFailure = reader.GetInt32(reader.GetOrdinal("continue_on_failure")),
+                    ContinueOnFailure = ReadMysqlIntAsInt32(reader, "continue_on_failure", nameof(PterodactylTask.ContinueOnFailure)),
                     CreatedAt = reader.IsDBNull(reader.GetOrdinal("created_at")) ? null : reader.GetDateTime(reader.GetOrdinal("created_at")),
                     UpdatedAt = reader.IsDBNull(reader.GetOrdinal("updated_at")) ? null : reader.GetDateTime(reader.GetOrdinal("updated_at"))
                 });
@@ -974,6 +978,43 @@ public class PterodactylDatabaseService
             throw;
         }
     }
+
+    /// <summary>
+    /// Reads integer-like MySQL values (signed/unsigned INT and smaller integer types) into int.
+    /// <see cref="MySqlDataReader.GetInt32(int)"/> throws <see cref="OverflowException"/> on UNSIGNED values above <see cref="int.MaxValue"/>.
+    /// </summary>
+    private int ReadMysqlIntAsInt32(MySqlDataReader reader, int ordinal, string fieldName)
+    {
+        var v = reader.GetInt64(ordinal);
+        if (v > int.MaxValue)
+        {
+            _logger?.LogWarning(
+                "MySQL integer value exceeds Int32.MaxValue (field: {FieldName}, value: {Value}); clamping for migration.",
+                fieldName,
+                v);
+            return int.MaxValue;
+        }
+
+        if (v < int.MinValue)
+        {
+            _logger?.LogWarning(
+                "MySQL integer value below Int32.MinValue (field: {FieldName}, value: {Value}); clamping for migration.",
+                fieldName,
+                v);
+            return int.MinValue;
+        }
+
+        return (int)v;
+    }
+
+    private int ReadMysqlIntAsInt32(MySqlDataReader reader, string columnName, string fieldName) =>
+        ReadMysqlIntAsInt32(reader, reader.GetOrdinal(columnName), fieldName);
+
+    private int? ReadMysqlIntAsInt32OrNull(MySqlDataReader reader, int ordinal, string fieldName) =>
+        reader.IsDBNull(ordinal) ? null : ReadMysqlIntAsInt32(reader, ordinal, fieldName);
+
+    private int? ReadMysqlIntAsInt32OrNull(MySqlDataReader reader, string columnName, string fieldName) =>
+        ReadMysqlIntAsInt32OrNull(reader, reader.GetOrdinal(columnName), fieldName);
 }
 
 public class TableCheckResult
