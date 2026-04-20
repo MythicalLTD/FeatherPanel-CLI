@@ -6,6 +6,7 @@ using FeatherCli.Core.Api;
 using FeatherCli.Commands.Server;
 using FeatherCli.Commands.Config;
 using FeatherCli.Commands.Migrate;
+using FeatherCli.Commands.OAuth2;
 
 namespace FeatherCli.Core.Commands;
 
@@ -34,6 +35,7 @@ public class CommandRegistry
         _modules.Add(new ServerCommandModule());
         _modules.Add(new ConfigCommandModule());
         _modules.Add(new MigrateCommandModule());
+        _modules.Add(new OAuth2CommandModule());
     }
 
     public RootCommand CreateRootCommand()

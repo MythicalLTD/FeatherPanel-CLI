@@ -64,6 +64,7 @@ try
     services.AddSingleton<ServerService>();
     services.AddSingleton<PowerService>();
     services.AddSingleton<LogService>();
+    services.AddSingleton<OAuth2Service>();
 
     // Build service provider
     var serviceProvider = services.BuildServiceProvider();
