@@ -18,6 +18,11 @@ public class FeatherPanelApiClient
     private readonly ServerService _serverService;
     private readonly PowerService _powerService;
     private readonly LogService _logService;
+    private readonly BackupService _backupService;
+    private readonly FileService _fileService;
+    private readonly DatabaseService _databaseService;
+    private readonly ScheduleService _scheduleService;
+    private readonly AccountService _accountService;
 
     public FeatherPanelApiClient(
         HttpClient httpClient, 
@@ -25,7 +30,12 @@ public class FeatherPanelApiClient
         ILogger<FeatherPanelApiClient> logger,
         ServerService serverService,
         PowerService powerService,
-        LogService logService)
+        LogService logService,
+        BackupService backupService,
+        FileService fileService,
+        DatabaseService databaseService,
+        ScheduleService scheduleService,
+        AccountService accountService)
     {
         _httpClient = httpClient;
         _configManager = configManager;
@@ -33,6 +43,11 @@ public class FeatherPanelApiClient
         _serverService = serverService;
         _powerService = powerService;
         _logService = logService;
+        _backupService = backupService;
+        _fileService = fileService;
+        _databaseService = databaseService;
+        _scheduleService = scheduleService;
+        _accountService = accountService;
     }
 
     public async Task<bool> ValidateConnectionAsync()
@@ -176,6 +191,84 @@ public class FeatherPanelApiClient
     {
         return await _logService.UploadServerInstallLogsAsync(serverUuidShort);
     }
+
+    public Task<PaginatedListResponse<ServerBackup>> ListBackupsAsync(string uuid, int page = 1, int perPage = 25)
+        => _backupService.ListAsync(uuid, page, perPage);
+
+    public Task<BackupCreateResult> CreateBackupAsync(string uuid, string? name = null)
+        => _backupService.CreateAsync(uuid, name);
+
+    public Task DeleteBackupAsync(string uuid, string backupUuid)
+        => _backupService.DeleteAsync(uuid, backupUuid);
+
+    public Task RestoreBackupAsync(string uuid, string backupUuid, bool truncateDirectory = false)
+        => _backupService.RestoreAsync(uuid, backupUuid, truncateDirectory);
+
+    public Task<BackupDownloadResult> GetBackupDownloadUrlAsync(string uuid, string backupUuid)
+        => _backupService.GetDownloadUrlAsync(uuid, backupUuid);
+
+    public Task LockBackupAsync(string uuid, string backupUuid)
+        => _backupService.LockAsync(uuid, backupUuid);
+
+    public Task UnlockBackupAsync(string uuid, string backupUuid)
+        => _backupService.UnlockAsync(uuid, backupUuid);
+
+    public Task<List<ServerFileItem>> ListFilesAsync(string uuid, string path = "/")
+        => _fileService.ListAsync(uuid, path);
+
+    public Task<byte[]> ReadFileAsync(string uuid, string path)
+        => _fileService.ReadAsync(uuid, path);
+
+    public Task WriteFileAsync(string uuid, string path, byte[] content)
+        => _fileService.WriteAsync(uuid, path, content);
+
+    public Task DeleteFilesAsync(string uuid, IEnumerable<string> files, string root = "/")
+        => _fileService.DeleteAsync(uuid, files, root);
+
+    public Task CreateDirectoryAsync(string uuid, string parentPath, string name)
+        => _fileService.CreateDirectoryAsync(uuid, parentPath, name);
+
+    public Task<PaginatedListResponse<ServerDatabase>> ListDatabasesAsync(string uuid, int page = 1, int perPage = 25)
+        => _databaseService.ListAsync(uuid, page, perPage);
+
+    public Task<List<DatabaseHostInfo>> ListDatabaseHostsAsync(string uuid)
+        => _databaseService.ListHostsAsync(uuid);
+
+    public Task<DatabaseCreateResult> CreateDatabaseAsync(string uuid, DatabaseCreateRequest body)
+        => _databaseService.CreateAsync(uuid, body);
+
+    public Task DeleteDatabaseAsync(string uuid, int databaseId)
+        => _databaseService.DeleteAsync(uuid, databaseId);
+
+    public Task<PaginatedListResponse<ServerSchedule>> ListSchedulesAsync(string uuid, int page = 1, int perPage = 25)
+        => _scheduleService.ListAsync(uuid, page, perPage);
+
+    public Task<ServerSchedule> CreateScheduleAsync(string uuid, ScheduleCreateRequest body)
+        => _scheduleService.CreateAsync(uuid, body);
+
+    public Task DeleteScheduleAsync(string uuid, int scheduleId)
+        => _scheduleService.DeleteAsync(uuid, scheduleId);
+
+    public Task RunScheduleAsync(string uuid, int scheduleId)
+        => _scheduleService.RunAsync(uuid, scheduleId);
+
+    public Task<ScheduleToggleResult> ToggleScheduleAsync(string uuid, int scheduleId)
+        => _scheduleService.ToggleAsync(uuid, scheduleId);
+
+    public Task<SshKeyListResponse> ListSshKeysAsync(int page = 1, int limit = 50)
+        => _accountService.ListSshKeysAsync(page, limit);
+
+    public Task<UserSshKey> CreateSshKeyAsync(string name, string publicKey)
+        => _accountService.CreateSshKeyAsync(name, publicKey);
+
+    public Task DeleteSshKeyAsync(int id)
+        => _accountService.DeleteSshKeyAsync(id);
+
+    public Task<List<UserNotification>> ListNotificationsAsync()
+        => _accountService.ListNotificationsAsync();
+
+    public Task DismissNotificationAsync(int id)
+        => _accountService.DismissNotificationAsync(id);
 
     // Migration/Import Methods
     public async Task<PrerequisitesResponse?> CheckPrerequisitesAsync()

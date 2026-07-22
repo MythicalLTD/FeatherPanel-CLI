@@ -64,6 +64,11 @@ try
     services.AddSingleton<ServerService>();
     services.AddSingleton<PowerService>();
     services.AddSingleton<LogService>();
+    services.AddSingleton<BackupService>();
+    services.AddSingleton<FileService>();
+    services.AddSingleton<DatabaseService>();
+    services.AddSingleton<ScheduleService>();
+    services.AddSingleton<AccountService>();
     services.AddSingleton<OAuth2Service>();
 
     // Build service provider

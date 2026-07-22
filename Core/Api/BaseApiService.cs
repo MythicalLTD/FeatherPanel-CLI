@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using FeatherCli.Core.Configuration;
 
 namespace FeatherCli.Core.Api;
@@ -52,6 +53,45 @@ public abstract class BaseApiService
         }
 
         return content;
+    }
+
+    protected async Task<HttpResponseMessage> SendRawAsync(HttpRequestMessage request, string operationDescription)
+    {
+        var response = await _httpClient.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            var content = await response.Content.ReadAsStringAsync();
+            _logger.LogError("Failed to {Operation}. Status: {StatusCode}, Content: {Content}",
+                operationDescription, response.StatusCode, content);
+            throw new HttpRequestException($"Failed to {operationDescription}: {response.StatusCode}");
+        }
+
+        return response;
+    }
+
+    protected T Unpack<T>(string content)
+    {
+        var wrapped = JsonConvert.DeserializeObject<FeatherCli.Core.Models.ApiResponse<T>>(content);
+        if (wrapped != null && (wrapped.Data != null || wrapped.Success || wrapped.Error))
+        {
+            if (wrapped.Error)
+            {
+                throw new InvalidOperationException(wrapped.ErrorMessage ?? wrapped.Message ?? "API error");
+            }
+
+            if (wrapped.Data != null)
+            {
+                return wrapped.Data;
+            }
+        }
+
+        var direct = JsonConvert.DeserializeObject<T>(content);
+        if (direct == null)
+        {
+            throw new InvalidOperationException("Failed to deserialize API response");
+        }
+
+        return direct;
     }
 }
 

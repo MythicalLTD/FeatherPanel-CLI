@@ -65,6 +65,20 @@ public abstract class BaseServerCommand
         return null;
     }
 
+    protected async Task<string?> ResolveServerUuidAsync(
+        FeatherPanelApiClient apiClient,
+        ConfigManager configManager,
+        string? uuid)
+    {
+        if (!string.IsNullOrEmpty(uuid))
+        {
+            return uuid;
+        }
+
+        var selected = await SelectServerInteractivelyAsync(apiClient, configManager);
+        return selected?.UuidShort ?? selected?.Uuid;
+    }
+
     protected async Task<bool> ValidateConfigurationAsync(ConfigManager configManager, FeatherPanelApiClient apiClient)
     {
         if (!await configManager.IsConfiguredAsync())

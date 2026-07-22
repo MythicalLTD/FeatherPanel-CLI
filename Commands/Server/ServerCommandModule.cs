@@ -35,6 +35,10 @@ public class ServerCommandModule : ICommandModule
         serverCommand.AddCommand(commandCommand.CreateCommandCommand(serviceProvider));
         serverCommand.AddCommand(reinstallCommand.CreateReinstallCommand(serviceProvider));
         serverCommand.AddCommand(connectCommand.CreateConnectCommand(serviceProvider));
+        serverCommand.AddCommand(new ServerBackupCommands().CreateCommand(serviceProvider));
+        serverCommand.AddCommand(new ServerFileCommands().CreateCommand(serviceProvider));
+        serverCommand.AddCommand(new ServerDatabaseCommands().CreateCommand(serviceProvider));
+        serverCommand.AddCommand(new ServerScheduleCommands().CreateCommand(serviceProvider));
 
         return serverCommand;
     }
