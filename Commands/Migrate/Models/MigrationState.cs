@@ -8,6 +8,18 @@ public class MigrationState
     [JsonPropertyName("pterodactyl_path")]
     public string? PterodactylPath { get; set; }
 
+    [JsonPropertyName("migration_mode")]
+    public string? MigrationMode { get; set; }
+
+    [JsonPropertyName("sql_dump_path")]
+    public string? SqlDumpPath { get; set; }
+
+    [JsonPropertyName("env_file_path")]
+    public string? EnvFilePath { get; set; }
+
+    [JsonPropertyName("staging_database")]
+    public string? StagingDatabase { get; set; }
+
     [JsonPropertyName("current_step")]
     public string? CurrentStep { get; set; }
 

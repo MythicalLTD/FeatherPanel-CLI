@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.CommandLine.Invocation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using FeatherCli.Core.Commands;
@@ -19,6 +20,10 @@ public class MigrateCommandModule : ICommandModule
     private PterodactylConfig? _pterodactylConfig;
     private MigrationState? _migrationState;
     private MigrationProgressService? _progressService;
+    private StagingDatabaseOptions? _stagingDbOptions;
+    private SqlDumpImportService? _sqlDumpImportService;
+    private string? _stagingDatabaseName;
+    private bool _ownsStagingDatabase;
 
     public string Name => "migrate";
     public string Description => "Migrate from Pterodactyl to FeatherPanel";
@@ -44,6 +49,48 @@ public class MigrateCommandModule : ICommandModule
             description: "Path to Pterodactyl installation directory (skips the prompt)",
             getDefaultValue: () => null
         );
+
+        var sqlDumpOption = new Option<string?>(
+            "--sql-dump",
+            description: "Path to a Pterodactyl .sql dump",
+            getDefaultValue: () => null
+        );
+
+        var envFileOption = new Option<string?>(
+            "--env-file",
+            description: "Panel .env file (for --sql-dump; provides APP_KEY)",
+            getDefaultValue: () => null
+        );
+
+        var appKeyOption = new Option<string?>(
+            "--app-key",
+            description: "Pterodactyl APP_KEY (alternative to --env-file)",
+            getDefaultValue: () => null
+        );
+
+        var stagingDbHostOption = new Option<string?>(
+            "--staging-db-host",
+            description: "MySQL host for loading --sql-dump (default: 127.0.0.1)",
+            getDefaultValue: () => null
+        );
+
+        var stagingDbPortOption = new Option<string?>(
+            "--staging-db-port",
+            description: "MySQL port for --sql-dump (default: 3306)",
+            getDefaultValue: () => null
+        );
+
+        var stagingDbUserOption = new Option<string?>(
+            "--staging-db-user",
+            description: "MySQL user for --sql-dump (default: root)",
+            getDefaultValue: () => null
+        );
+
+        var stagingDbPasswordOption = new Option<string?>(
+            "--staging-db-password",
+            description: "MySQL password for --sql-dump",
+            getDefaultValue: () => null
+        );
         
         var resetOption = new Option<bool>(
             "--reset",
@@ -54,18 +101,45 @@ public class MigrateCommandModule : ICommandModule
         migrateCommand.AddOption(confirmBlueprintOption);
         migrateCommand.AddOption(confirmMigrateOption);
         migrateCommand.AddOption(pterodactylDirOption);
+        migrateCommand.AddOption(sqlDumpOption);
+        migrateCommand.AddOption(envFileOption);
+        migrateCommand.AddOption(appKeyOption);
+        migrateCommand.AddOption(stagingDbHostOption);
+        migrateCommand.AddOption(stagingDbPortOption);
+        migrateCommand.AddOption(stagingDbUserOption);
+        migrateCommand.AddOption(stagingDbPasswordOption);
         migrateCommand.AddOption(resetOption);
         
-        migrateCommand.SetHandler(async (bool confirmBlueprint, bool confirmMigrate, string? pterodactylDir, bool reset) =>
+        migrateCommand.SetHandler(async (InvocationContext context) =>
         {
             var logger = serviceProvider.GetService<ILogger<MigrateCommandModule>>();
             var dbLogger = serviceProvider.GetService<ILogger<PterodactylDatabaseService>>();
             var maintenanceLogger = serviceProvider.GetService<ILogger<PterodactylMaintenanceService>>();
             var progressLogger = serviceProvider.GetService<ILogger<MigrationProgressService>>();
+            var dumpLogger = serviceProvider.GetService<ILogger<SqlDumpImportService>>();
             var configManager = serviceProvider.GetRequiredService<ConfigManager>();
             var apiClient = serviceProvider.GetRequiredService<FeatherPanelApiClient>();
-            await RunMigrationWizardAsync(logger, dbLogger, maintenanceLogger, progressLogger, configManager, apiClient, confirmBlueprint, confirmMigrate, pterodactylDir, reset);
-        }, confirmBlueprintOption, confirmMigrateOption, pterodactylDirOption, resetOption);
+
+            await RunMigrationWizardAsync(
+                logger,
+                dbLogger,
+                maintenanceLogger,
+                progressLogger,
+                dumpLogger,
+                configManager,
+                apiClient,
+                context.ParseResult.GetValueForOption(confirmBlueprintOption),
+                context.ParseResult.GetValueForOption(confirmMigrateOption),
+                context.ParseResult.GetValueForOption(pterodactylDirOption),
+                context.ParseResult.GetValueForOption(sqlDumpOption),
+                context.ParseResult.GetValueForOption(envFileOption),
+                context.ParseResult.GetValueForOption(appKeyOption),
+                context.ParseResult.GetValueForOption(stagingDbHostOption),
+                context.ParseResult.GetValueForOption(stagingDbPortOption),
+                context.ParseResult.GetValueForOption(stagingDbUserOption),
+                context.ParseResult.GetValueForOption(stagingDbPasswordOption),
+                context.ParseResult.GetValueForOption(resetOption));
+        });
 
         // Add check subcommand
         var checkCommand = new Command("check", "Check if Pterodactyl installation is ready for migration (without migrating)");
@@ -96,11 +170,19 @@ public class MigrateCommandModule : ICommandModule
         ILogger<PterodactylDatabaseService>? dbLogger = null,
         ILogger<PterodactylMaintenanceService>? maintenanceLogger = null,
         ILogger<MigrationProgressService>? progressLogger = null,
+        ILogger<SqlDumpImportService>? dumpLogger = null,
         ConfigManager? configManager = null,
         FeatherPanelApiClient? apiClient = null,
         bool confirmBlueprint = false,
         bool confirmMigrate = false,
         string? pterodactylDir = null,
+        string? sqlDump = null,
+        string? envFile = null,
+        string? appKey = null,
+        string? stagingDbHost = null,
+        string? stagingDbPort = null,
+        string? stagingDbUser = null,
+        string? stagingDbPassword = null,
         bool reset = false)
     {
         // Initialize progress tracking
@@ -397,279 +479,53 @@ public class MigrateCommandModule : ICommandModule
 
         AnsiConsole.WriteLine();
 
-        // Get Pterodactyl installation path
+        var migrationMode = ResolveMigrationMode(sqlDump, pterodactylDir, isResuming);
+        if (migrationMode == null)
+        {
+            return;
+        }
+
+        PterodactylDatabaseService dbService;
         string pterodactylPath;
-        if (!string.IsNullOrEmpty(pterodactylDir))
-        {
-            pterodactylPath = Path.GetFullPath(pterodactylDir);
-            AnsiConsole.MarkupLine($"[yellow]Using Pterodactyl directory from --pterodactyl-dir: {pterodactylPath}[/]");
-        }
-        else if (isResuming && !string.IsNullOrEmpty(_migrationState?.PterodactylPath))
-        {
-            // Use saved path when resuming
-            pterodactylPath = _migrationState.PterodactylPath;
-            AnsiConsole.MarkupLine($"[yellow]Using saved Pterodactyl directory: {pterodactylPath}[/]");
-        }
-        else
-        {
-            var defaultPath = "/var/www/pterodactyl";
-            pterodactylPath = AnsiConsole.Ask<string>(
-                $"Enter the Pterodactyl installation path:",
-                defaultPath
-            );
-            // Normalize the path
-            pterodactylPath = Path.GetFullPath(pterodactylPath);
-        }
-        
-        // Update progress
-        UpdateProgress("Validating Pterodactyl Installation", pterodactylPath: pterodactylPath);
 
-        // Skip validation when resuming (already validated)
-        if (!isResuming)
+        if (migrationMode == "sql_dump")
         {
-            AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLine($"[yellow]Validating Pterodactyl installation at: {pterodactylPath}[/]");
+            var dumpReady = await SetupFromSqlDumpAsync(
+                dbLogger,
+                dumpLogger,
+                isResuming,
+                sqlDump,
+                envFile,
+                appKey,
+                stagingDbHost,
+                stagingDbPort,
+                stagingDbUser,
+                stagingDbPassword);
 
-            // Check if directory exists
-            if (!Directory.Exists(pterodactylPath))
+            if (!dumpReady || _pterodactylConfig == null)
             {
-                AnsiConsole.MarkupLine($"[red]✗ Directory does not exist: {pterodactylPath}[/]");
                 return;
             }
 
-            // Validate Pterodactyl installation
-            var validator = new PterodactylInstallationValidator();
-            var validationResult = validator.ValidateInstallation(pterodactylPath);
-            
-            if (!validationResult.IsValid)
+            pterodactylPath = _migrationState?.SqlDumpPath ?? sqlDump ?? "sql-dump";
+            dbService = new PterodactylDatabaseService(dbLogger);
+        }
+        else
+        {
+            var installReady = await SetupFromLocalInstallAsync(
+                dbLogger,
+                maintenanceLogger,
+                isResuming,
+                confirmBlueprint,
+                pterodactylDir);
+
+            if (!installReady || _pterodactylConfig == null)
             {
-                AnsiConsole.MarkupLine($"[red]✗ Invalid Pterodactyl installation: {EscapeMarkup(validationResult.ErrorMessage)}[/]");
                 return;
             }
 
-            AnsiConsole.MarkupLine("[green]✓ Valid Pterodactyl installation detected[/]");
-
-            // Check for .blueprint directory
-            if (validator.CheckBlueprintDirectory(pterodactylPath))
-            {
-                if (confirmBlueprint)
-                {
-                    AnsiConsole.MarkupLine("[yellow]⚠  Blueprint directory detected, but --confirm-blueprint flag is set. Proceeding without confirmation.[/]");
-                }
-                else
-                {
-                    var blueprintWarning = new BlueprintWarningDisplay();
-                    var proceed = blueprintWarning.ShowWarningAndConfirm();
-
-                    if (!proceed)
-                    {
-                        AnsiConsole.MarkupLine("[yellow]Migration cancelled by user.[/]");
-                        return;
-                    }
-                }
-            }
-        }
-        else
-        {
-            AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLine($"[yellow]Skipping Pterodactyl validation (resuming migration)[/]");
-        }
-
-        AnsiConsole.WriteLine();
-        
-        // Read and parse .env file
-        var envFilePath = Path.Combine(pterodactylPath, ".env");
-        if (!File.Exists(envFilePath))
-        {
-            AnsiConsole.MarkupLine($"[red]✗ .env file not found at: {envFilePath}[/]");
-            return;
-        }
-
-        if (!isResuming)
-        {
-            AnsiConsole.MarkupLine("[yellow]Reading configuration from .env file...[/]");
-        }
-        else
-        {
-            AnsiConsole.MarkupLine("[yellow]Reloading configuration from .env file...[/]");
-        }
-        
-        var configLoader = new ConfigurationLoader();
-        
-        try
-        {
-            _pterodactylConfig = configLoader.LoadFromEnvFile(envFilePath);
-        }
-        catch (Exception ex)
-        {
-            AnsiConsole.MarkupLine($"[red]✗ Failed to load configuration: {EscapeMarkup(ex.Message)}[/]");
-            return;
-        }
-
-        // Display configuration (masking sensitive data) - only on fresh migration
-        if (!isResuming)
-        {
-            var configDisplay = new ConfigurationDisplay();
-            configDisplay.DisplayConfiguration(_pterodactylConfig);
-        }
-
-        AnsiConsole.WriteLine();
-        
-        // Test database connection
-        AnsiConsole.MarkupLine("[yellow]Testing database connection...[/]");
-        var dbService = new PterodactylDatabaseService(dbLogger);
-        
-        try
-        {
-            var connectionTest = await AnsiConsole.Status()
-                .Spinner(Spinner.Known.Dots)
-                .SpinnerStyle(Style.Parse("yellow"))
-                .StartAsync("Connecting to database...", async ctx =>
-                {
-                    return await dbService.TestConnectionAsync(_pterodactylConfig);
-                });
-
-            if (connectionTest)
-            {
-                AnsiConsole.MarkupLine("[green]✓ Successfully connected to Pterodactyl database[/]");
-            }
-        }
-        catch (Exception ex)
-        {
-            AnsiConsole.MarkupLine($"[red]✗ Failed to connect to database: {EscapeMarkup(ex.Message)}[/]");
-            AnsiConsole.MarkupLine("[yellow]Please verify your database credentials in the .env file[/]");
-            return;
-        }
-
-        // Check for required tables
-        AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[yellow]Checking for required database tables...[/]");
-        
-        try
-        {
-            var tableCheckResult = await AnsiConsole.Status()
-                .Spinner(Spinner.Known.Dots)
-                .SpinnerStyle(Style.Parse("yellow"))
-                .StartAsync("Checking tables...", async ctx =>
-                {
-                    return await dbService.CheckRequiredTablesAsync(_pterodactylConfig);
-                });
-
-            if (tableCheckResult.AllTablesExist)
-            {
-                AnsiConsole.MarkupLine($"[green]✓ All {tableCheckResult.ExistingTables.Count} required tables found[/]");
-            }
-            else
-            {
-                AnsiConsole.MarkupLine($"[yellow]⚠  Found {tableCheckResult.ExistingTables.Count} of {PterodactylDatabaseService.GetRequiredTables().Length} required tables[/]");
-                AnsiConsole.MarkupLine($"[red]✗ Missing {tableCheckResult.MissingTables.Count} required table(s):[/]");
-                
-                foreach (var missingTable in tableCheckResult.MissingTables)
-                {
-                    AnsiConsole.MarkupLine($"[red]  - {missingTable}[/]");
-                }
-                
-                AnsiConsole.WriteLine();
-                var proceed = AnsiConsole.Confirm(
-                    "[yellow]Some required tables are missing. Do you want to continue anyway?[/]",
-                    false
-                );
-
-                if (!proceed)
-                {
-                    AnsiConsole.MarkupLine("[yellow]Migration cancelled by user.[/]");
-                    return;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            AnsiConsole.MarkupLine($"[red]✗ Failed to check required tables: {EscapeMarkup(ex.Message)}[/]");
-            AnsiConsole.MarkupLine("[yellow]Please verify your database connection and permissions[/]");
-            return;
-        }
-
-        // Read and display app name from settings
-        AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[yellow]Reading application settings...[/]");
-        
-        try
-        {
-            var appName = await AnsiConsole.Status()
-                .Spinner(Spinner.Known.Dots)
-                .SpinnerStyle(Style.Parse("yellow"))
-                .StartAsync("Loading settings...", async ctx =>
-                {
-                    return await dbService.GetSettingValueAsync(_pterodactylConfig, "settings::app:name");
-                });
-
-            if (!string.IsNullOrEmpty(appName))
-            {
-                AnsiConsole.MarkupLine($"[green]✓ Pterodactyl Panel Name: [bold]{appName}[/][/]");
-            }
-            else
-            {
-                AnsiConsole.MarkupLine("[yellow]⚠  App name not found in settings (settings::app:name)[/]");
-            }
-        }
-        catch (Exception ex)
-        {
-            AnsiConsole.MarkupLine($"[yellow]⚠  Could not read app name: {EscapeMarkup(ex.Message)}[/]");
-            // Don't fail the migration if we can't read the app name
-        }
-
-        AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[green]✓ Configuration loaded and ready for migration[/]");
-        AnsiConsole.MarkupLine($"[dim]Pterodactyl Path: {pterodactylPath}[/]");
-        
-        // Check and set maintenance mode
-        AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[yellow]Checking Pterodactyl maintenance mode...[/]");
-        
-        var maintenanceService = new PterodactylMaintenanceService(maintenanceLogger);
-        var isInMaintenance = maintenanceService.IsInMaintenanceMode(pterodactylPath);
-        
-        if (isInMaintenance)
-        {
-            AnsiConsole.MarkupLine("[green]✓ Pterodactyl is already in maintenance mode[/]");
-        }
-        else
-        {
-            AnsiConsole.MarkupLine("[yellow]Pterodactyl is not in maintenance mode. Attempting to set it...[/]");
-            
-            try
-            {
-                var maintenanceSet = await AnsiConsole.Status()
-                    .Spinner(Spinner.Known.Dots)
-                    .SpinnerStyle(Style.Parse("yellow"))
-                    .StartAsync("Setting maintenance mode...", async ctx =>
-                    {
-                        return await maintenanceService.SetMaintenanceModeAsync(pterodactylPath);
-                    });
-
-                if (maintenanceSet)
-                {
-                    AnsiConsole.MarkupLine("[green]✓ Successfully set Pterodactyl to maintenance mode[/]");
-                }
-                else
-                {
-                    AnsiConsole.MarkupLine("[red]✗ Failed to set Pterodactyl to maintenance mode[/]");
-                    AnsiConsole.MarkupLine("[yellow]Please manually put Pterodactyl into maintenance mode with:[/]");
-                    AnsiConsole.MarkupLine($"[yellow]  cd {pterodactylPath}[/]");
-                    AnsiConsole.MarkupLine("[yellow]  php artisan down[/]");
-                    AnsiConsole.MarkupLine("[yellow]Then try the migrator tool again[/]");
-                    return;
-                }
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.MarkupLine($"[red]✗ Error setting maintenance mode: {EscapeMarkup(ex.Message)}[/]");
-                AnsiConsole.MarkupLine("[yellow]Please manually put Pterodactyl into maintenance mode with:[/]");
-                AnsiConsole.MarkupLine($"[yellow]  cd {pterodactylPath}[/]");
-                AnsiConsole.MarkupLine("[yellow]  php artisan down[/]");
-                AnsiConsole.MarkupLine("[yellow]Then try the migrator tool again[/]");
-                return;
-            }
+            pterodactylPath = _migrationState?.PterodactylPath ?? pterodactylDir ?? "/var/www/pterodactyl";
+            dbService = new PterodactylDatabaseService(dbLogger);
         }
 
         AnsiConsole.WriteLine();
@@ -708,17 +564,554 @@ public class MigrateCommandModule : ICommandModule
 
             if (!confirmMigration)
             {
+                await CleanupStagingDatabaseAsync();
                 AnsiConsole.MarkupLine("[yellow]Migration cancelled by user.[/]");
-                if (_migrationState != null && _progressService != null)
-                {
-                    _migrationState.Status = "cancelled";
-                    _migrationState.CurrentStep = "Cancelled by user";
-                    _progressService.SaveProgress(_migrationState);
-                }
                 return;
             }
         }
 
+        try
+        {
+            await RunMigrationStepsAsync(logger, dbService, apiClient, pterodactylPath);
+            if (_migrationState?.Status == "completed")
+            {
+                await CleanupStagingDatabaseAsync();
+            }
+        }
+        catch
+        {
+            AnsiConsole.MarkupLine("[yellow]Staging database kept for resume.[/]");
+            throw;
+        }
+    }
+
+    private string? ResolveMigrationMode(string? sqlDump, string? pterodactylDir, bool isResuming)
+    {
+        if (isResuming && !string.IsNullOrEmpty(_migrationState?.MigrationMode))
+        {
+            AnsiConsole.MarkupLine($"[yellow]Resuming in {_migrationState.MigrationMode} mode[/]");
+            return _migrationState.MigrationMode;
+        }
+
+        if (!string.IsNullOrEmpty(sqlDump) && !string.IsNullOrEmpty(pterodactylDir))
+        {
+            AnsiConsole.MarkupLine("[red]✗ Use either --sql-dump or --pterodactyl-dir, not both[/]");
+            return null;
+        }
+
+        if (!string.IsNullOrEmpty(sqlDump))
+        {
+            return "sql_dump";
+        }
+
+        if (!string.IsNullOrEmpty(pterodactylDir))
+        {
+            return "install";
+        }
+
+        var choice = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("How is Pterodactyl installed?")
+                .AddChoices(
+                    "Local installation",
+                    "Docker / SQL dump"
+                ));
+
+        return choice.StartsWith("Docker", StringComparison.Ordinal) ? "sql_dump" : "install";
+    }
+
+    private async Task<bool> SetupFromSqlDumpAsync(
+        ILogger<PterodactylDatabaseService>? dbLogger,
+        ILogger<SqlDumpImportService>? dumpLogger,
+        bool isResuming,
+        string? sqlDump,
+        string? envFile,
+        string? appKey,
+        string? stagingDbHost,
+        string? stagingDbPort,
+        string? stagingDbUser,
+        string? stagingDbPassword)
+    {
+        AnsiConsole.MarkupLine("[bold blue]Source: SQL dump[/]");
+        AnsiConsole.WriteLine();
+
+        if (string.IsNullOrWhiteSpace(sqlDump))
+        {
+            if (isResuming && !string.IsNullOrEmpty(_migrationState?.SqlDumpPath))
+            {
+                sqlDump = _migrationState.SqlDumpPath;
+                AnsiConsole.MarkupLine($"[yellow]Using saved SQL dump: {sqlDump}[/]");
+            }
+            else
+            {
+                sqlDump = AnsiConsole.Ask<string>("Path to Pterodactyl .sql dump:");
+            }
+        }
+
+        sqlDump = Path.GetFullPath(sqlDump);
+        if (!File.Exists(sqlDump))
+        {
+            AnsiConsole.MarkupLine($"[red]✗ SQL dump not found: {sqlDump}[/]");
+            return false;
+        }
+
+        AnsiConsole.MarkupLine($"[green]✓ SQL dump: {sqlDump}[/]");
+
+        if (string.IsNullOrWhiteSpace(envFile) && string.IsNullOrWhiteSpace(appKey))
+        {
+            if (isResuming && !string.IsNullOrEmpty(_migrationState?.EnvFilePath) && File.Exists(_migrationState.EnvFilePath))
+            {
+                envFile = _migrationState.EnvFilePath;
+            }
+            else
+            {
+                var keySource = AnsiConsole.Prompt(
+                    new SelectionPrompt<string>()
+                        .Title("Provide APP_KEY via:")
+                        .AddChoices("Panel .env file", "Paste APP_KEY"));
+
+                if (keySource.StartsWith("Panel", StringComparison.Ordinal))
+                {
+                    envFile = AnsiConsole.Ask<string>("Path to panel .env:");
+                }
+                else
+                {
+                    appKey = AnsiConsole.Prompt(
+                        new TextPrompt<string>("APP_KEY:")
+                            .Secret());
+                }
+            }
+        }
+
+        var configLoader = new ConfigurationLoader();
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(envFile))
+            {
+                envFile = Path.GetFullPath(envFile);
+                if (!File.Exists(envFile))
+                {
+                    AnsiConsole.MarkupLine($"[red]✗ .env file not found: {envFile}[/]");
+                    return false;
+                }
+
+                _pterodactylConfig = configLoader.LoadFromEnvFile(envFile);
+                AnsiConsole.MarkupLine($"[green]✓ Loaded configuration from {envFile}[/]");
+            }
+            else
+            {
+                _pterodactylConfig = configLoader.LoadFromAppKey(appKey!);
+                AnsiConsole.MarkupLine("[green]✓ Using provided APP_KEY[/]");
+            }
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]✗ Failed to load configuration: {EscapeMarkup(ex.Message)}[/]");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_pterodactylConfig.AppKey))
+        {
+            AnsiConsole.MarkupLine("[red]✗ APP_KEY is required[/]");
+            AnsiConsole.MarkupLine("[dim]  docker compose exec panel cat /app/var/.env > panel.env[/]");
+            return false;
+        }
+
+        if (!isResuming)
+        {
+            var configDisplay = new ConfigurationDisplay();
+            configDisplay.DisplayConfiguration(_pterodactylConfig);
+        }
+
+        _stagingDbOptions = new StagingDatabaseOptions
+        {
+            Host = string.IsNullOrWhiteSpace(stagingDbHost)
+                ? AnsiConsole.Ask("Staging MySQL host:", "127.0.0.1")
+                : stagingDbHost,
+            Port = string.IsNullOrWhiteSpace(stagingDbPort)
+                ? AnsiConsole.Ask("Staging MySQL port:", "3306")
+                : stagingDbPort,
+            Username = string.IsNullOrWhiteSpace(stagingDbUser)
+                ? AnsiConsole.Ask("Staging MySQL username:", "root")
+                : stagingDbUser,
+            Password = stagingDbPassword ?? AnsiConsole.Prompt(
+                new TextPrompt<string>("Staging MySQL password:")
+                    .AllowEmpty()
+                    .Secret())
+        };
+
+        _sqlDumpImportService = new SqlDumpImportService(dumpLogger);
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[yellow]Testing staging MySQL connection...[/]");
+        try
+        {
+            await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(Style.Parse("yellow"))
+                .StartAsync("Connecting to staging MySQL...", async _ =>
+                {
+                    await _sqlDumpImportService.TestStagingConnectionAsync(_stagingDbOptions);
+                });
+            AnsiConsole.MarkupLine("[green]✓ Staging MySQL connection OK[/]");
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]✗ Cannot connect to staging MySQL: {EscapeMarkup(ex.Message)}[/]");
+            return false;
+        }
+
+        var reuseStaging = isResuming
+            && !string.IsNullOrEmpty(_migrationState?.StagingDatabase)
+            && await _sqlDumpImportService.StagingDatabaseExistsAsync(_stagingDbOptions, _migrationState!.StagingDatabase!);
+
+        if (reuseStaging)
+        {
+            _stagingDatabaseName = _migrationState!.StagingDatabase;
+            _ownsStagingDatabase = true;
+            AnsiConsole.MarkupLine($"[green]✓ Reusing staging database: {_stagingDatabaseName}[/]");
+        }
+        else
+        {
+            try
+            {
+                _stagingDatabaseName = await AnsiConsole.Status()
+                    .Spinner(Spinner.Known.Dots)
+                    .SpinnerStyle(Style.Parse("yellow"))
+                    .StartAsync("Creating staging database...", async _ =>
+                        await _sqlDumpImportService.CreateStagingDatabaseAsync(_stagingDbOptions));
+
+                _ownsStagingDatabase = true;
+                AnsiConsole.MarkupLine($"[green]✓ Created staging database: {_stagingDatabaseName}[/]");
+
+                await AnsiConsole.Status()
+                    .Spinner(Spinner.Known.Dots)
+                    .SpinnerStyle(Style.Parse("yellow"))
+                    .StartAsync("Importing SQL dump...", async _ =>
+                        await _sqlDumpImportService.ImportDumpAsync(sqlDump, _stagingDbOptions, _stagingDatabaseName!));
+
+                AnsiConsole.MarkupLine("[green]✓ SQL dump imported[/]");
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[red]✗ Failed to import SQL dump: {EscapeMarkup(ex.Message)}[/]");
+                await CleanupStagingDatabaseAsync();
+                return false;
+            }
+        }
+
+        configLoader.ApplyStagingDatabase(_pterodactylConfig, _stagingDbOptions, _stagingDatabaseName!);
+
+        if (_migrationState != null)
+        {
+            _migrationState.MigrationMode = "sql_dump";
+            _migrationState.SqlDumpPath = sqlDump;
+            _migrationState.EnvFilePath = envFile;
+            _migrationState.StagingDatabase = _stagingDatabaseName;
+            _migrationState.PterodactylPath = sqlDump;
+            _progressService?.SaveProgress(_migrationState);
+        }
+
+        UpdateProgress("SQL dump loaded", pterodactylPath: sqlDump);
+
+        var dbService = new PterodactylDatabaseService(dbLogger);
+        return await VerifySourceDatabaseAsync(dbService);
+    }
+
+    private async Task<bool> SetupFromLocalInstallAsync(
+        ILogger<PterodactylDatabaseService>? dbLogger,
+        ILogger<PterodactylMaintenanceService>? maintenanceLogger,
+        bool isResuming,
+        bool confirmBlueprint,
+        string? pterodactylDir)
+    {
+        AnsiConsole.MarkupLine("[bold blue]Source: local Pterodactyl installation[/]");
+        AnsiConsole.WriteLine();
+
+        string pterodactylPath;
+        if (!string.IsNullOrEmpty(pterodactylDir))
+        {
+            pterodactylPath = Path.GetFullPath(pterodactylDir);
+            AnsiConsole.MarkupLine($"[yellow]Using Pterodactyl directory from --pterodactyl-dir: {pterodactylPath}[/]");
+        }
+        else if (isResuming && !string.IsNullOrEmpty(_migrationState?.PterodactylPath))
+        {
+            pterodactylPath = _migrationState.PterodactylPath;
+            AnsiConsole.MarkupLine($"[yellow]Using saved Pterodactyl directory: {pterodactylPath}[/]");
+        }
+        else
+        {
+            pterodactylPath = Path.GetFullPath(AnsiConsole.Ask(
+                "Enter the Pterodactyl installation path:",
+                "/var/www/pterodactyl"));
+        }
+
+        UpdateProgress("Validating Pterodactyl Installation", pterodactylPath: pterodactylPath);
+
+        if (_migrationState != null)
+        {
+            _migrationState.MigrationMode = "install";
+            _migrationState.PterodactylPath = pterodactylPath;
+            _progressService?.SaveProgress(_migrationState);
+        }
+
+        if (!isResuming)
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine($"[yellow]Validating Pterodactyl installation at: {pterodactylPath}[/]");
+
+            if (!Directory.Exists(pterodactylPath))
+            {
+                AnsiConsole.MarkupLine($"[red]✗ Directory does not exist: {pterodactylPath}[/]");
+                return false;
+            }
+
+            var validator = new PterodactylInstallationValidator();
+            var validationResult = validator.ValidateInstallation(pterodactylPath);
+
+            if (!validationResult.IsValid)
+            {
+                AnsiConsole.MarkupLine($"[red]✗ Invalid Pterodactyl installation: {EscapeMarkup(validationResult.ErrorMessage)}[/]");
+                return false;
+            }
+
+            AnsiConsole.MarkupLine("[green]✓ Valid Pterodactyl installation detected[/]");
+
+            if (validator.CheckBlueprintDirectory(pterodactylPath))
+            {
+                if (confirmBlueprint)
+                {
+                    AnsiConsole.MarkupLine("[yellow]⚠  Blueprint directory detected, but --confirm-blueprint flag is set. Proceeding without confirmation.[/]");
+                }
+                else
+                {
+                    var blueprintWarning = new BlueprintWarningDisplay();
+                    if (!blueprintWarning.ShowWarningAndConfirm())
+                    {
+                        AnsiConsole.MarkupLine("[yellow]Migration cancelled by user.[/]");
+                        return false;
+                    }
+                }
+            }
+        }
+        else
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[yellow]Skipping Pterodactyl validation (resuming migration)[/]");
+        }
+
+        AnsiConsole.WriteLine();
+
+        var envFilePath = Path.Combine(pterodactylPath, ".env");
+        if (!File.Exists(envFilePath))
+        {
+            AnsiConsole.MarkupLine($"[red]✗ .env file not found at: {envFilePath}[/]");
+            return false;
+        }
+
+        AnsiConsole.MarkupLine(isResuming
+            ? "[yellow]Reloading configuration from .env file...[/]"
+            : "[yellow]Reading configuration from .env file...[/]");
+
+        var configLoader = new ConfigurationLoader();
+        try
+        {
+            _pterodactylConfig = configLoader.LoadFromEnvFile(envFilePath);
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]✗ Failed to load configuration: {EscapeMarkup(ex.Message)}[/]");
+            return false;
+        }
+
+        if (!isResuming)
+        {
+            var configDisplay = new ConfigurationDisplay();
+            configDisplay.DisplayConfiguration(_pterodactylConfig);
+        }
+
+        var dbService = new PterodactylDatabaseService(dbLogger);
+        if (!await VerifySourceDatabaseAsync(dbService))
+        {
+            return false;
+        }
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[yellow]Checking Pterodactyl maintenance mode...[/]");
+
+        var maintenanceService = new PterodactylMaintenanceService(maintenanceLogger);
+        if (maintenanceService.IsInMaintenanceMode(pterodactylPath))
+        {
+            AnsiConsole.MarkupLine("[green]✓ Pterodactyl is already in maintenance mode[/]");
+            return true;
+        }
+
+        AnsiConsole.MarkupLine("[yellow]Pterodactyl is not in maintenance mode. Attempting to set it...[/]");
+
+        try
+        {
+            var maintenanceSet = await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(Style.Parse("yellow"))
+                .StartAsync("Setting maintenance mode...", async _ =>
+                    await maintenanceService.SetMaintenanceModeAsync(pterodactylPath));
+
+            if (maintenanceSet)
+            {
+                AnsiConsole.MarkupLine("[green]✓ Successfully set Pterodactyl to maintenance mode[/]");
+                return true;
+            }
+
+            AnsiConsole.MarkupLine("[red]✗ Failed to set Pterodactyl to maintenance mode[/]");
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]✗ Error setting maintenance mode: {EscapeMarkup(ex.Message)}[/]");
+        }
+
+        AnsiConsole.MarkupLine("[yellow]Please manually put Pterodactyl into maintenance mode with:[/]");
+        AnsiConsole.MarkupLine($"[yellow]  cd {pterodactylPath}[/]");
+        AnsiConsole.MarkupLine("[yellow]  php artisan down[/]");
+        AnsiConsole.MarkupLine("[yellow]Then try the migrator tool again[/]");
+        return false;
+    }
+
+    private async Task<bool> VerifySourceDatabaseAsync(PterodactylDatabaseService dbService)
+    {
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[yellow]Testing database connection...[/]");
+
+        try
+        {
+            var connectionTest = await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(Style.Parse("yellow"))
+                .StartAsync("Connecting to database...", async _ =>
+                    await dbService.TestConnectionAsync(_pterodactylConfig!));
+
+            if (connectionTest)
+            {
+                AnsiConsole.MarkupLine("[green]✓ Successfully connected to Pterodactyl database[/]");
+            }
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]✗ Failed to connect to database: {EscapeMarkup(ex.Message)}[/]");
+            AnsiConsole.MarkupLine("[yellow]Please verify your database credentials[/]");
+            return false;
+        }
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[yellow]Checking for required database tables...[/]");
+
+        try
+        {
+            var tableCheckResult = await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(Style.Parse("yellow"))
+                .StartAsync("Checking tables...", async _ =>
+                    await dbService.CheckRequiredTablesAsync(_pterodactylConfig!));
+
+            if (tableCheckResult.AllTablesExist)
+            {
+                AnsiConsole.MarkupLine($"[green]✓ All {tableCheckResult.ExistingTables.Count} required tables found[/]");
+            }
+            else
+            {
+                AnsiConsole.MarkupLine($"[yellow]⚠  Found {tableCheckResult.ExistingTables.Count} of {PterodactylDatabaseService.GetRequiredTables().Length} required tables[/]");
+                AnsiConsole.MarkupLine($"[red]✗ Missing {tableCheckResult.MissingTables.Count} required table(s):[/]");
+
+                foreach (var missingTable in tableCheckResult.MissingTables)
+                {
+                    AnsiConsole.MarkupLine($"[red]  - {missingTable}[/]");
+                }
+
+                AnsiConsole.WriteLine();
+                if (!AnsiConsole.Confirm("[yellow]Some required tables are missing. Do you want to continue anyway?[/]", false))
+                {
+                    AnsiConsole.MarkupLine("[yellow]Migration cancelled by user.[/]");
+                    return false;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]✗ Failed to check required tables: {EscapeMarkup(ex.Message)}[/]");
+            AnsiConsole.MarkupLine("[yellow]Please verify your database connection and permissions[/]");
+            return false;
+        }
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[yellow]Reading application settings...[/]");
+
+        try
+        {
+            var appName = await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(Style.Parse("yellow"))
+                .StartAsync("Loading settings...", async _ =>
+                    await dbService.GetSettingValueAsync(_pterodactylConfig!, "settings::app:name"));
+
+            if (!string.IsNullOrEmpty(appName))
+            {
+                AnsiConsole.MarkupLine($"[green]✓ Pterodactyl Panel Name: [bold]{EscapeMarkup(appName)}[/][/]");
+            }
+            else
+            {
+                AnsiConsole.MarkupLine("[yellow]⚠  App name not found in settings (settings::app:name)[/]");
+            }
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[yellow]⚠  Could not read app name: {EscapeMarkup(ex.Message)}[/]");
+        }
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[green]✓ Configuration loaded and ready for migration[/]");
+        return true;
+    }
+
+    private async Task CleanupStagingDatabaseAsync()
+    {
+        if (!_ownsStagingDatabase ||
+            _sqlDumpImportService == null ||
+            _stagingDbOptions == null ||
+            string.IsNullOrEmpty(_stagingDatabaseName))
+        {
+            return;
+        }
+
+        try
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine($"[yellow]Cleaning up staging database {_stagingDatabaseName}...[/]");
+            await _sqlDumpImportService.DropStagingDatabaseAsync(_stagingDbOptions, _stagingDatabaseName);
+            AnsiConsole.MarkupLine("[green]✓ Staging database removed[/]");
+
+            if (_migrationState != null)
+            {
+                _migrationState.StagingDatabase = null;
+                _progressService?.SaveProgress(_migrationState);
+            }
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[yellow]⚠  Could not drop staging database: {EscapeMarkup(ex.Message)}[/]");
+            AnsiConsole.MarkupLine($"[dim]You can drop it manually: DROP DATABASE `{_stagingDatabaseName}`;[/]");
+        }
+        finally
+        {
+            _ownsStagingDatabase = false;
+            _stagingDatabaseName = null;
+        }
+    }
+
+    private async Task RunMigrationStepsAsync(
+        ILogger<MigrateCommandModule>? logger,
+        PterodactylDatabaseService dbService,
+        FeatherPanelApiClient apiClient,
+        string pterodactylPath)
+    {
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine("[bold green]Starting migration...[/]");
         AnsiConsole.MarkupLine("[dim]Remember: Update Wings after migration completes![/]");
